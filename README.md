@@ -1,10 +1,18 @@
 # Fluiddynamik — visuell
 
-Interaktive Erklärseite zum Skript *Fluiddynamik FS 2026* (IFD, Version 04.04.2026).
+**→ [lucl-bit.github.io/fluiddynamik-visuell](https://lucl-bit.github.io/fluiddynamik-visuell/)**
+
+Interaktive Erklärseite zum Skript *Fluiddynamik FS 2026* (IFD, ETH Zürich, Version 04.04.2026).
 Jedes Thema hat eine Animation zum Herumspielen und daneben die Erklärung, warum das
 Bild zeigt, was es zeigt.
 
-**Öffnen:** `index.html` doppelklicken. Kein Server, kein Build, kein Internet nötig.
+**Lokal öffnen:** `index.html` doppelklicken. Kein Server, kein Build, kein Internet nötig —
+reines HTML, CSS und JavaScript ohne jede Abhängigkeit.
+
+> Private Lernhilfe, kein offizielles Lehrmaterial. Formeln, Abbildungsnummern und
+> Seitenverweise beziehen sich auf das Skript des Instituts für Fluiddynamik der ETH Zürich;
+> die Rechte daran liegen beim Institut. Die Animationen, Simulationen und Texte hier sind
+> eigenständig entstanden.
 
 ## Was drin ist
 
