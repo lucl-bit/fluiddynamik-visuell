@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluiddynamik — visuell</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-title">Fluiddynamik</div>
+      <div class="brand-sub">visuell &amp; interaktiv · FS 2026</div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      Belege beziehen sich auf<br>
+      <strong>Skript Fluiddynamik FS 2026</strong><br>
+      (IFD, Version 04.04.2026)
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="burger" id="burger" aria-label="Menü">☰</button>
+      <div class="crumb" id="crumb"></div>
+    </div>
+    <div class="content" id="content"></div>
+  </main>
+
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/modules/linien.js"></script>
+<script src="js/modules/potentiallab.js"></script>
+<script src="js/modules/joukowski.js"></script>
+<script src="js/modules/wirbel.js"></script>
+<script src="js/modules/wirbelstreckung.js"></script>
+<script src="js/modules/wirbelring.js"></script>
+<script src="js/modules/stoss.js"></script>
+<script src="js/modules/lavalduese.js"></script>
+<script src="js/modules/roadmap.js"></script>
+<script>FV.start();</script>
+
+</body>
+</html>

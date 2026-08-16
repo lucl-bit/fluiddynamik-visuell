@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Potentialströmungs-Lab · Feld-Builder</title>
+<style>
+:root{
+  --bg:#0a0d16; --bg2:#0f1422; --panel:#131a2b; --panel2:#1a2338;
+  --border:#232e48; --text:#dbe4f5; --muted:#7d8db0; --accent:#60a5fa;
+  --accent2:#34d399; --warn:#fbbf24; --danger:#f87171;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:14px; display:flex; flex-direction:column; overflow:hidden;
+}
+header{
+  display:flex; align-items:center; gap:16px; padding:10px 16px;
+  background:var(--bg2); border-bottom:1px solid var(--border); flex-wrap:wrap;
+}
+header h1{font-size:16px; font-weight:600; white-space:nowrap;}
+header h1 span{color:var(--accent);}
+.tools{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+.tools .lbl{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin:0 4px 0 10px;}
+button{
+  background:var(--panel2); color:var(--text); border:1px solid var(--border);
+  border-radius:6px; padding:5px 10px; font-size:13px; cursor:pointer;
+  transition:background .12s, border-color .12s;
+}
+button:hover{background:#243051; border-color:#334370;}
+button.active{background:#1e3a8a; border-color:var(--accent); color:#fff;}
+button.toggle.on{background:#123d2e; border-color:var(--accent2); color:#c9f7e4;}
+button.danger:hover{border-color:var(--danger); color:var(--danger);}
+select{
+  background:var(--panel2); color:var(--text); border:1px solid var(--border);
+  border-radius:6px; padding:5px 8px; font-size:13px;
+}
+main{flex:1; display:flex; min-height:0;}
+#canvasWrap{
+  position:relative; flex:1 1 70%; min-width:0; background:#05070d;
+  cursor:default; overflow:hidden;
+}
+#canvasWrap.placing{cursor:crosshair;}
+#canvasWrap canvas{position:absolute; inset:0; width:100%; height:100%;}
+#tooltip{
+  position:absolute; pointer-events:none; display:none; z-index:10;
+  background:rgba(10,14,24,.92); border:1px solid var(--border); border-radius:6px;
+  padding:6px 9px; font-size:11.5px; line-height:1.5; white-space:nowrap;
+  font-variant-numeric:tabular-nums; color:var(--text);
+}
+#tooltip b{color:var(--accent);}
+#pauseBadge{
+  position:absolute; top:10px; left:12px; z-index:9; display:none;
+  background:rgba(251,191,36,.12); border:1px solid var(--warn); color:var(--warn);
+  border-radius:6px; padding:3px 10px; font-size:12px;
+}
+#hint{
+  position:absolute; bottom:10px; left:12px; z-index:9;
+  color:var(--muted); font-size:11.5px; pointer-events:none;
+}
+#sidebar{
+  flex:0 0 340px; max-width:340px; background:var(--bg2);
+  border-left:1px solid var(--border); display:flex; flex-direction:column;
+  min-height:0;
+}
+#elemList{flex:1 1 55%; overflow-y:auto; padding:10px;}
+#elemList h2, #theory h2{
+  font-size:11px; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--muted); margin:4px 2px 8px;
+}
+.card{
+  background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; margin-bottom:8px;
+}
+.card.sel{border-color:var(--accent);}
+.card .head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+.card .head .name{font-weight:600; font-size:13px;}
+.card .head .name .dot{margin-right:6px;}
+.card .head button{padding:1px 8px; font-size:12px;}
+.srow{display:flex; align-items:center; gap:8px; margin:4px 0;}
+.srow label{flex:0 0 62px; color:var(--muted); font-size:12px;}
+.srow input[type=range]{flex:1; accent-color:var(--accent); min-width:0;}
+.srow output{flex:0 0 52px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums;}
+.card .note{color:var(--warn); font-size:11px; margin-top:4px;}
+.empty{color:var(--muted); font-size:12.5px; padding:8px 4px; line-height:1.5;}
+#theory{
+  flex:1 1 45%; border-top:1px solid var(--border); overflow-y:auto;
+  padding:10px; background:var(--bg2);
+}
+.formulaBox{
+  background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:9px 11px; margin-bottom:8px; font-size:12.5px; line-height:1.7;
+  font-family:"SF Mono",Menlo,Consolas,monospace; overflow-x:auto;
+  white-space:nowrap;
+}
+.formulaBox .fn{color:var(--accent); font-weight:600;}
+.formulaBox .mir{color:var(--warn);}
+#probe table{width:100%; border-collapse:collapse; font-size:12.5px;}
+#probe td{padding:2.5px 6px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums;}
+#probe td:first-child{color:var(--muted);}
+#probe td:last-child{text-align:right;}
+footer{
+  padding:5px 16px; background:var(--bg2); border-top:1px solid var(--border);
+  color:var(--muted); font-size:11px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>≋</span> Potentialströmungs-Lab</h1>
+  <div class="tools">
+    <span class="lbl">Hinzufügen</span>
+    <button id="addUniform" title="Parallelströmung u∞, v∞">Parallel</button>
+    <button data-place="source"  title="Quelle Q&gt;0 — auf Canvas klicken">Quelle ⊕</button>
+    <button data-place="sink"    title="Senke Q&lt;0 — auf Canvas klicken">Senke ⊖</button>
+    <button data-place="vortex"  title="Potentialwirbel Γ — auf Canvas klicken">Wirbel ↻</button>
+    <button data-place="dipole"  title="Dipol m, β — auf Canvas klicken">Dipol ⇢</button>
+    <button data-place="cylinder" title="Kreiszylinder = Parallelströmung + Dipol">Zylinder ◯</button>
+    <button data-place="wallH" title="Horizontale Wand (Spiegelungsprinzip)">Wand —</button>
+    <button data-place="wallV" title="Vertikale Wand (Spiegelungsprinzip)">Wand |</button>
+    <span class="lbl">Layer</span>
+    <button class="toggle on" id="tglPart">Partikel</button>
+    <button class="toggle on" id="tglPsi">Ψ-Linien</button>
+    <button class="toggle"    id="tglPhi">Φ-Linien</button>
+    <button class="toggle"    id="tglSpeed">|w|</button>
+    <button class="toggle"    id="tglPress">Druck p</button>
+    <span class="lbl">Preset</span>
+    <select id="preset">
+      <option value="">– wählen –</option>
+      <option value="zylinder">Zylinder umströmt</option>
+      <option value="halbkoerper">Halbkörper (Quelle + Parallel)</option>
+      <option value="rankine">Rankine-Körper</option>
+      <option value="magnus">Zylinder mit Zirkulation</option>
+      <option value="quelleWand">Quelle vor Wand</option>
+      <option value="wirbelpaar">Wirbelpaar</option>
+    </select>
+    <button class="danger" id="btnReset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <div id="canvasWrap">
+    <canvas id="cvHeat"></canvas>
+    <canvas id="cvLines"></canvas>
+    <canvas id="cvPart"></canvas>
+    <div id="tooltip"></div>
+    <div id="pauseBadge">⏸ pausiert (Leertaste)</div>
+    <div id="hint">Element wählen &amp; klicken zum Platzieren · Ziehen = verschieben · Rechtsklick = löschen · Leertaste = Pause</div>
+  </div>
+  <div id="sidebar">
+    <div id="elemList">
+      <h2>Elemente</h2>
+      <div id="cards"></div>
+    </div>
+    <div id="theory">
+      <h2>Komplexes Potential</h2>
+      <div class="formulaBox" id="fFormula"></div>
+      <div class="formulaBox" id="wFormula"></div>
+      <h2>Werte an der Mausposition</h2>
+      <div id="probe">
+        <table>
+          <tr><td>z = x + iy</td><td id="pvZ">–</td></tr>
+          <tr><td>Φ (Potential)</td><td id="pvPhi">–</td></tr>
+          <tr><td>Ψ (Stromfunktion)</td><td id="pvPsi">–</td></tr>
+          <tr><td>u</td><td id="pvU">–</td></tr>
+          <tr><td>v</td><td id="pvV">–</td></tr>
+          <tr><td>|w|</td><td id="pvW">–</td></tr>
+          <tr><td>p − p∞ (ρ=1)</td><td id="pvP">–</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  F(z) = Σ Fₖ(z) live summiert · w(z) = dF/dz analytisch · Stromlinien via Marching Squares · Staupunkte: Gridsearch + Newton · Wände: Spiegelungsprinzip (Kap. 9)
+</footer>
+
+<script>
+'use strict';
+/* ============================================================
+   Potentialströmungs-Lab — 2D-Potentialströmungen (Kap. 9)
+   Alles client-side, vanilla JS + Canvas API.
+   ============================================================ */
+
+const TAU = 2*Math.PI;
+const EPS2 = 0.004;                 // r²-Clamp gegen NaN an Singularitäten
+
+/* ---------- Welt & Canvas ---------- */
+const wrap    = document.getElementById('canvasWrap');
+const cvHeat  = document.getElementById('cvHeat');
+const cvLines = document.getElementById('cvLines');
+const cvPart  = document.getElementById('cvPart');
+const ctxHeat = cvHeat.getContext('2d');
+const ctxLines= cvLines.getContext('2d');
+const ctxPart = cvPart.getContext('2d');
+
+let W=800, H=600, DPR=1;
+const world = { xmin:-5, xmax:5, ymin:-4, ymax:4 };   // xmin/xmax folgen dem Aspect
+
+function resize(){
+  DPR = window.devicePixelRatio || 1;
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  for(const cv of [cvHeat,cvLines,cvPart]){
+    cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  }
+  const halfY = 4, aspect = W/H;
+  world.ymin=-halfY; world.ymax=halfY;
+  world.xmin=-halfY*aspect; world.xmax=halfY*aspect;
+  markDirty(true);
+}
+function w2sx(x){ return (x-world.xmin)/(world.xmax-world.xmin)*W; }
+function w2sy(y){ return (world.ymax-y)/(world.ymax-world.ymin)*H; }
+function s2wx(px){ return world.xmin + px/W*(world.xmax-world.xmin); }
+function s2wy(py){ return world.ymax - py/H*(world.ymax-world.ymin); }
+
+/* ---------- Datenmodell ---------- */
+let idCounter = 1;
+let elements = [];        // {id, type, x, y, params:{...}}
+let selectedId = null;
+
+const TYPE_INFO = {
+  uniform : {name:'Parallelströmung', dot:'⇉', color:'#94a3b8'},
+  source  : {name:'Quelle/Senke',     dot:'⊕', color:'#34d399'},
+  vortex  : {name:'Wirbel',           dot:'↻', color:'#c084fc'},
+  dipole  : {name:'Dipol',            dot:'⇢', color:'#f472b6'},
+  cylinder: {name:'Zylinder',         dot:'◯', color:'#60a5fa'},
+  wall    : {name:'Wand',             dot:'▬', color:'#fbbf24'},
+};
+
+function addElement(type, x, y, params){
+  const el = {id:idCounter++, type, x, y, params};
+  elements.push(el);
+  selectedId = el.id;
+  renderSidebar(); markDirty(true);
+  return el;
+}
+function removeElement(id){
+  elements = elements.filter(e=>e.id!==id);
+  if(selectedId===id) selectedId=null;
+  renderSidebar(); markDirty(true);
+}
+function getUniform(){ return elements.find(e=>e.type==='uniform'); }
+function uniformUV(){
+  const u = getUniform();
+  if(!u) return {u:0, v:0, U:0, alpha:0};
+  const a = u.params.alpha*Math.PI/180;
+  return {u:u.params.U*Math.cos(a), v:u.params.U*Math.sin(a), U:u.params.U, alpha:a};
+}
+
+/* ---------- Effektive Singularitäten (Zylinder→Dipol, Wände→Spiegelung) ----------
+   Jede Singularität wird an jeder Wand einfach gespiegelt:
+   Quelle/Senke → gleiches Q, Wirbel → −Γ, Dipol-Winkel gespiegelt.       */
+let effSing = [];   // {kind:'source'|'vortex'|'dipole', x,y, Q|gamma|m,beta}
+let wallList = [];
+
+function rebuildEffective(){
+  const {U, alpha} = uniformUV();
+  const base = [];
+  for(const e of elements){
+    if(e.type==='source')  base.push({kind:'source', x:e.x, y:e.y, Q:e.params.Q, src:e});
+    if(e.type==='vortex')  base.push({kind:'vortex', x:e.x, y:e.y, gamma:e.params.gamma, src:e});
+    if(e.type==='dipole')  base.push({kind:'dipole', x:e.x, y:e.y, m:e.params.m, beta:e.params.angle*Math.PI/180, src:e});
+    if(e.type==='cylinder')base.push({kind:'dipole', x:e.x, y:e.y, m:U*e.params.r0*e.params.r0, beta:alpha, src:e, cyl:true});
+  }
+  wallList = elements.filter(e=>e.type==='wall');
+  effSing = base.slice();
+  for(const w of wallList){
+    for(const s of base){
+      const m = Object.assign({}, s);
+      m.mirror = true; delete m.src;
+      if(w.params.orientation==='h'){
+        m.y = 2*w.params.pos - s.y;
+        if(s.kind==='vortex') m.gamma = -s.gamma;
+        if(s.kind==='dipole') m.beta  = -s.beta;
+      } else {
+        m.x = 2*w.params.pos - s.x;
+        if(s.kind==='vortex') m.gamma = -s.gamma;
+        if(s.kind==='dipole') m.beta  = Math.PI - s.beta;
+      }
+      effSing.push(m);
+    }
+  }
+}
+
+/* ---------- Feldauswertung (analytisch) ---------- */
+function velocityAt(x, y){
+  const uv = uniformUV();
+  let u = uv.u, v = uv.v;
+  for(const s of effSing){
+    const dx = x-s.x, dy = y-s.y;
+    let r2 = dx*dx+dy*dy; if(r2<EPS2) r2=EPS2;
+    if(s.kind==='source'){
+      const k = s.Q/(TAU*r2); u += k*dx; v += k*dy;
+    } else if(s.kind==='vortex'){
+      const k = s.gamma/(TAU*r2); u += -k*dy; v += k*dx;
+    } else {                              // Dipol: w = −m e^{iβ} / z'²
+      const r4 = r2*r2, c = Math.cos(s.beta), si = Math.sin(s.beta);
+      const A = dx*dx-dy*dy, B = 2*dx*dy;
+      u += -s.m*(c*A + si*B)/r4;
+      v +=  s.m*(si*A - c*B)/r4;
+    }
+  }
+  return [u, v];
+}
+
+function phiPsiAt(x, y){
+  const uv = uniformUV();
+  let phi = uv.u*x + uv.v*y;
+  let psi = uv.u*y - uv.v*x;
+  for(const s of effSing){
+    const dx = x-s.x, dy = y-s.y;
+    let r2 = dx*dx+dy*dy; if(r2<EPS2) r2=EPS2;
+    const th = Math.atan2(dy, dx), lnr = 0.5*Math.log(r2);
+    if(s.kind==='source'){
+      phi += s.Q/TAU*lnr;  psi += s.Q/TAU*th;
+    } else if(s.kind==='vortex'){
+      phi += s.gamma/TAU*th;  psi += -s.gamma/TAU*lnr;
+    } else {
+      const c = Math.cos(s.beta), si = Math.sin(s.beta);
+      phi += s.m*( c*dx + si*dy)/r2;
+      psi += s.m*(si*dx -  c*dy)/r2;
+    }
+  }
+  return [phi, psi];
+}
+
+function insideCylinder(x, y, shrink){
+  for(const e of elements){
+    if(e.type!=='cylinder') continue;
+    const dx=x-e.x, dy=y-e.y, r=e.params.r0*(shrink||1);
+    if(dx*dx+dy*dy < r*r) return true;
+  }
+  return false;
+}
+
+/* ---------- Gitter ---------- */
+const NX=241, NY=161;
+const gPsi = new Float32Array(NX*NY);
+const gPhi = new Float32Array(NX*NY);
+const gSpd = new Float32Array(NX*NY);
+const gPrs = new Float32Array(NX*NY);
+const gMask= new Uint8Array(NX*NY);   // 1 = gültig
+let vRef = 1;                          // Referenzgeschwindigkeit für Farben
+let stagPoints = [];
+
+function gx(i){ return world.xmin + i/(NX-1)*(world.xmax-world.xmin); }
+function gy(j){ return world.ymin + j/(NY-1)*(world.ymax-world.ymin); }
+
+function computeGrid(){
+  rebuildEffective();
+  const uv = uniformUV();
+  const pInf = 0.5*uv.U*uv.U;          // Bernoulli-Referenz: p−p∞ = ρ/2(U∞²−|w|²)
+  for(let j=0;j<NY;j++){
+    const y = gy(j);
+    for(let i=0;i<NX;i++){
+      const x = gx(i), idx = j*NX+i;
+      const [u,v] = velocityAt(x,y);
+      const [phi,psi] = phiPsiAt(x,y);
+      const spd = Math.hypot(u,v);
+      gPsi[idx]=psi; gPhi[idx]=phi; gSpd[idx]=spd;
+      gPrs[idx]=pInf - 0.5*spd*spd;
+      gMask[idx]= insideCylinder(x,y,0.995) ? 0 : 1;
+    }
+  }
+  // robuste Referenz (90%-Perzentil der Geschwindigkeit)
+  const sample=[];
+  for(let k=0;k<gSpd.length;k+=13) if(gMask[k]) sample.push(gSpd[k]);
+  sample.sort((a,b)=>a-b);
+  vRef = Math.max(0.3, sample[Math.floor(sample.length*0.9)]||1);
+  findStagnation();
+}
+
+function percentile(arr, p, maskArr){
+  const s=[];
+  for(let k=0;k<arr.length;k+=7) if(!maskArr||maskArr[k]) s.push(arr[k]);
+  s.sort((a,b)=>a-b);
+  return s[Math.max(0,Math.min(s.length-1,Math.floor(s.length*p)))];
+}
+
+/* ---------- Staupunkte: Gridsearch + Newton ---------- */
+function findStagnation(){
+  stagPoints = [];
+  if(effSing.length===0 && uniformUV().U===0) return;
+  const cx=80, cy=54, cand=[];
+  const dxw=(world.xmax-world.xmin)/cx, dyw=(world.ymax-world.ymin)/cy;
+  const spd2 = new Float32Array((cx+1)*(cy+1));
+  for(let j=0;j<=cy;j++) for(let i=0;i<=cx;i++){
+    const [u,v]=velocityAt(world.xmin+i*dxw, world.ymin+j*dyw);
+    spd2[j*(cx+1)+i]=u*u+v*v;
+  }
+  for(let j=1;j<cy;j++) for(let i=1;i<cx;i++){
+    const c=spd2[j*(cx+1)+i];
+    if(c>0.5*vRef*vRef) continue;
+    let isMin=true;
+    for(let dj=-1;dj<=1&&isMin;dj++) for(let di=-1;di<=1;di++){
+      if(di===0&&dj===0) continue;
+      if(spd2[(j+dj)*(cx+1)+i+di]<c){isMin=false;break;}
+    }
+    if(isMin) cand.push([world.xmin+i*dxw, world.ymin+j*dyw]);
+  }
+  const h=1e-4;
+  for(let [x,y] of cand){
+    let ok=false;
+    for(let it=0;it<25;it++){
+      const [u,v]=velocityAt(x,y);
+      if(u*u+v*v<1e-10){ok=true;break;}
+      const [uxp]= velocityAt(x+h,y), [uxm]=velocityAt(x-h,y);
+      const [uyp,vyp1]=velocityAt(x,y+h), [uym,vym1]=velocityAt(x,y-h);
+      const [,vxp]=velocityAt(x+h,y), [,vxm]=velocityAt(x-h,y);
+      const a=(uxp-uxm)/(2*h), b=(uyp-uym)/(2*h);
+      const c=(vxp-vxm)/(2*h), d=(vyp1-vym1)/(2*h);
+      const det=a*d-b*c;
+      if(Math.abs(det)<1e-12) break;
+      const sx=( d*u - b*v)/det, sy=(-c*u + a*v)/det;
+      x-=sx; y-=sy;
+      if(Math.abs(sx)+Math.abs(sy)<1e-9){ok=true;break;}
+    }
+    if(!ok) continue;
+    const [u,v]=velocityAt(x,y);
+    if(u*u+v*v>1e-6) continue;
+    if(x<world.xmin||x>world.xmax||y<world.ymin||y>world.ymax) continue;
+    if(insideCylinder(x,y,0.98)) continue;
+    let nearSing=false;
+    for(const s of effSing){ if(Math.hypot(x-s.x,y-s.y)<0.08){nearSing=true;break;} }
+    if(nearSing) continue;
+    let dup=false;
+    for(const p of stagPoints){ if(Math.hypot(x-p.x,y-p.y)<0.06){dup=true;break;} }
+    if(!dup){
+      const [,psi]=phiPsiAt(x,y);
+      stagPoints.push({x,y,psi});
+    }
+  }
+}
+
+/* ---------- Marching Squares ---------- */
+function marchingSquares(field, level, jumpThresh){
+  const segs=[];
+  for(let j=0;j<NY-1;j++){
+    for(let i=0;i<NX-1;i++){
+      const i00=j*NX+i, i10=i00+1, i01=i00+NX, i11=i01+1;
+      if(!(gMask[i00]&&gMask[i10]&&gMask[i01]&&gMask[i11])) continue;
+      const a=field[i00], b=field[i10], c=field[i11], d=field[i01];
+      const mn=Math.min(a,b,c,d), mx=Math.max(a,b,c,d);
+      if(level<mn||level>mx) continue;
+      if(jumpThresh && mx-mn>jumpThresh) continue;   // Branch-Cut überspringen
+      const x0=gx(i), x1=gx(i+1), y0=gy(j), y1=gy(j+1);
+      // Kantenpunkte: 0=unten(a-b) 1=rechts(b-c) 2=oben(d-c) 3=links(a-d)
+      const pts=[];
+      if((a<level)!==(b<level)){const t=(level-a)/(b-a); pts.push([x0+t*(x1-x0),y0,0]);}
+      if((b<level)!==(c<level)){const t=(level-b)/(c-b); pts.push([x1,y0+t*(y1-y0),1]);}
+      if((d<level)!==(c<level)){const t=(level-d)/(c-d); pts.push([x0+t*(x1-x0),y1,2]);}
+      if((a<level)!==(d<level)){const t=(level-a)/(d-a); pts.push([x0,y0+t*(y1-y0),3]);}
+      if(pts.length===2) segs.push([pts[0],pts[1]]);
+      else if(pts.length===4){ segs.push([pts[0],pts[3]]); segs.push([pts[1],pts[2]]); }
+    }
+  }
+  return segs;
+}
+
+function branchJump(kind){
+  // Sprunghöhe der mehrdeutigen Anteile: Ψ springt um Q (Quellen), Φ um Γ (Wirbel)
+  let mn=Infinity;
+  for(const s of effSing){
+    if(kind==='psi'&&s.kind==='source') mn=Math.min(mn,Math.abs(s.Q));
+    if(kind==='phi'&&s.kind==='vortex') mn=Math.min(mn,Math.abs(s.gamma));
+  }
+  return isFinite(mn) ? 0.45*mn : 0;
+}
+
+/* ---------- Colormaps ---------- */
+function lerpC(c1,c2,t){ return [c1[0]+(c2[0]-c1[0])*t, c1[1]+(c2[1]-c1[1])*t, c1[2]+(c2[2]-c1[2])*t]; }
+const CM_INFERNO=[[5,5,20],[45,15,80],[120,28,109],[190,55,82],[237,105,37],[251,180,26],[252,255,164]];
+const CM_PRESS  =[[37,99,235],[96,150,240],[16,20,34],[229,120,110],[220,38,38]];
+function mapColor(cm, t){
+  t=Math.max(0,Math.min(1,t));
+  const n=cm.length-1, f=t*n, i=Math.min(n-1,Math.floor(f));
+  return lerpC(cm[i],cm[i+1],f-i);
+}
+
+/* ---------- Rendering: Heatmap ---------- */
+const heatOff = document.createElement('canvas');
+heatOff.width=NX; heatOff.height=NY;
+const heatOffCtx = heatOff.getContext('2d');
+
+function drawHeat(){
+  ctxHeat.setTransform(1,0,0,1,0,0);
+  ctxHeat.clearRect(0,0,cvHeat.width,cvHeat.height);
+  const mode = layers.speed ? 'speed' : layers.press ? 'press' : null;
+  if(!mode) return;
+  const field = mode==='speed'?gSpd:gPrs;
+  const lo = percentile(field,0.02,gMask), hi = percentile(field,0.98,gMask);
+  const rng = (hi-lo)||1;
+  const img = heatOffCtx.createImageData(NX,NY);
+  for(let j=0;j<NY;j++){
+    for(let i=0;i<NX;i++){
+      const idx=j*NX+i, o=((NY-1-j)*NX+i)*4;      // y-Flip fürs Bild
+      let col;
+      if(!gMask[idx]) col=[14,18,30];
+      else col = mapColor(mode==='speed'?CM_INFERNO:CM_PRESS,(field[idx]-lo)/rng);
+      img.data[o]=col[0]; img.data[o+1]=col[1]; img.data[o+2]=col[2]; img.data[o+3]=255;
+    }
+  }
+  heatOffCtx.putImageData(img,0,0);
+  ctxHeat.imageSmoothingEnabled=true;
+  ctxHeat.drawImage(heatOff,0,0,cvHeat.width,cvHeat.height);
+}
+
+/* ---------- Rendering: Linien, Glyphen, Staupunkte ---------- */
+function drawSegs(ctx, segs){
+  ctx.beginPath();
+  for(const [[xa,ya],[xb,yb]] of segs){
+    ctx.moveTo(w2sx(xa),w2sy(ya));
+    ctx.lineTo(w2sx(xb),w2sy(yb));
+  }
+  ctx.stroke();
+}
+
+function contourLevels(field, n){
+  const lo=percentile(field,0.03,gMask), hi=percentile(field,0.97,gMask);
+  const lv=[]; for(let k=1;k<n;k++) lv.push(lo+(hi-lo)*k/n);
+  return lv;
+}
+
+function drawLines(){
+  const ctx=ctxLines;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,W,H);
+  const heatOn = layers.speed||layers.press;
+
+  if(layers.psi){
+    ctx.strokeStyle = heatOn ? 'rgba(255,255,255,0.30)' : 'rgba(96,165,250,0.55)';
+    ctx.lineWidth=1;
+    const jt=branchJump('psi');
+    for(const L of contourLevels(gPsi,26)) drawSegs(ctx, marchingSquares(gPsi,L,jt));
+  }
+  if(layers.phi){
+    ctx.strokeStyle = heatOn ? 'rgba(180,255,220,0.35)' : 'rgba(52,211,153,0.45)';
+    ctx.lineWidth=1; ctx.setLineDash([5,4]);
+    const jt=branchJump('phi');
+    for(const L of contourLevels(gPhi,26)) drawSegs(ctx, marchingSquares(gPhi,L,jt));
+    ctx.setLineDash([]);
+  }
+  // Staustromlinien hervorheben
+  if(layers.psi){
+    ctx.strokeStyle='#fbbf24'; ctx.lineWidth=2.2;
+    ctx.shadowColor='#fbbf24'; ctx.shadowBlur=6;
+    const jt=branchJump('psi');
+    const done=[];
+    for(const p of stagPoints){
+      if(done.some(v=>Math.abs(v-p.psi)<1e-4)) continue;
+      done.push(p.psi);
+      drawSegs(ctx, marchingSquares(gPsi,p.psi,jt));
+    }
+    ctx.shadowBlur=0;
+  }
+  drawWalls(ctx);
+  drawGlyphs(ctx);
+  drawStagMarkers(ctx);
+}
+
+function drawWalls(ctx){
+  for(const w of wallList){
+    ctx.strokeStyle='#fbbf24'; ctx.lineWidth = w.id===selectedId?4:3;
+    ctx.beginPath();
+    if(w.params.orientation==='h'){
+      const sy=w2sy(w.params.pos); ctx.moveTo(0,sy); ctx.lineTo(W,sy);
+    } else {
+      const sx=w2sx(w.params.pos); ctx.moveTo(sx,0); ctx.lineTo(sx,H);
+    }
+    ctx.stroke();
+    // Schraffur
+    ctx.strokeStyle='rgba(251,191,36,0.35)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    if(w.params.orientation==='h'){
+      const sy=w2sy(w.params.pos);
+      for(let x=0;x<W;x+=14){ ctx.moveTo(x,sy); ctx.lineTo(x-8,sy+8); }
+    } else {
+      const sx=w2sx(w.params.pos);
+      for(let y=0;y<H;y+=14){ ctx.moveTo(sx,y); ctx.lineTo(sx-8,y+8); }
+    }
+    ctx.stroke();
+  }
+}
+
+function drawGlyphs(ctx){
+  for(const e of elements){
+    if(e.type==='uniform'||e.type==='wall') continue;
+    const sx=w2sx(e.x), sy=w2sy(e.y);
+    const sel = e.id===selectedId;
+    const col = TYPE_INFO[e.type].color;
+    ctx.lineWidth = sel?2.5:1.8;
+    ctx.strokeStyle=col; ctx.fillStyle=col;
+    ctx.shadowColor=col; ctx.shadowBlur=sel?12:6;
+    if(e.type==='cylinder'){
+      const rp = e.params.r0/(world.xmax-world.xmin)*W;
+      ctx.beginPath(); ctx.arc(sx,sy,rp,0,TAU); ctx.stroke();
+      ctx.globalAlpha=0.12; ctx.fill(); ctx.globalAlpha=1;
+    } else if(e.type==='source'){
+      const sink = e.params.Q<0;
+      ctx.strokeStyle = sink?'#f87171':col; ctx.shadowColor=ctx.strokeStyle;
+      ctx.beginPath(); ctx.arc(sx,sy,8,0,TAU); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sx-4.5,sy); ctx.lineTo(sx+4.5,sy);
+      if(!sink){ ctx.moveTo(sx,sy-4.5); ctx.lineTo(sx,sy+4.5); }
+      ctx.stroke();
+    } else if(e.type==='vortex'){
+      ctx.beginPath(); ctx.arc(sx,sy,8,0.4,TAU-0.9); ctx.stroke();
+      const dir = e.params.gamma>=0?1:-1;
+      ctx.beginPath(); ctx.arc(sx,sy,2.2,0,TAU); ctx.fill();
+      ctx.beginPath();
+      const aA = dir>0 ? TAU-0.9 : 0.4;
+      const ax=sx+8*Math.cos(aA), ay=sy-8*Math.sin(aA)*-1;
+      ctx.moveTo(ax-4,ay-4*dir); ctx.lineTo(ax,ay); ctx.lineTo(ax-4*dir,ay+4);
+      ctx.stroke();
+    } else if(e.type==='dipole'){
+      const b=e.params.angle*Math.PI/180;
+      const dx=Math.cos(b)*12, dy=-Math.sin(b)*12;
+      ctx.beginPath(); ctx.arc(sx,sy,5,0,TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx-dx,sy-dy); ctx.lineTo(sx+dx,sy+dy); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sx+dx,sy+dy);
+      ctx.lineTo(sx+dx*0.55-dy*0.25, sy+dy*0.55+dx*0.25);
+      ctx.lineTo(sx+dx*0.55+dy*0.25, sy+dy*0.55-dx*0.25);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+  }
+}
+
+function drawStagMarkers(ctx){
+  for(const p of stagPoints){
+    const sx=w2sx(p.x), sy=w2sy(p.y);
+    ctx.strokeStyle='#fde68a'; ctx.lineWidth=2;
+    ctx.shadowColor='#fbbf24'; ctx.shadowBlur=10;
+    ctx.beginPath();
+    ctx.moveTo(sx-6,sy-6); ctx.lineTo(sx+6,sy+6);
+    ctx.moveTo(sx-6,sy+6); ctx.lineTo(sx+6,sy-6);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+}
+
+/* ---------- Partikel (RK4) ---------- */
+const NPART=500;
+const parts=[];
+let paused=false;
+
+function spawnPart(p){
+  const uv=uniformUV();
+  const sources = effSing.filter(s=>s.kind==='source'&&s.Q>0&&!s.mirror);
+  const totQ = sources.reduce((a,s)=>a+s.Q,0);
+  const r1=Math.random();
+  if(sources.length && (uv.U<0.05 || r1<Math.min(0.6,totQ/(totQ+uv.U*8+1e-9)))){
+    // an einer Quelle erzeugen
+    let pick=Math.random()*totQ;
+    let s=sources[0];
+    for(const q of sources){ pick-=q.Q; if(pick<=0){s=q;break;} }
+    const a=Math.random()*TAU;
+    p.x=s.x+0.13*Math.cos(a); p.y=s.y+0.13*Math.sin(a);
+  } else if(uv.U>=0.05){
+    // am Einströmrand
+    const perp=Math.random()*2-1;
+    const cx=(world.xmin+world.xmax)/2, cy=(world.ymin+world.ymax)/2;
+    const Rx=(world.xmax-world.xmin)/2, Ry=(world.ymax-world.ymin)/2;
+    p.x = cx - Math.cos(uv.alpha)*Rx*0.99 - Math.sin(uv.alpha)*perp*Rx;
+    p.y = cy - Math.sin(uv.alpha)*Ry*0.99 + Math.cos(uv.alpha)*perp*Ry;
+    p.x = Math.max(world.xmin,Math.min(world.xmax,p.x));
+    p.y = Math.max(world.ymin,Math.min(world.ymax,p.y));
+  } else {
+    p.x=world.xmin+Math.random()*(world.xmax-world.xmin);
+    p.y=world.ymin+Math.random()*(world.ymax-world.ymin);
+  }
+  p.age=0; p.maxAge=500+Math.random()*700;
+}
+function initParts(){
+  parts.length=0;
+  for(let i=0;i<NPART;i++){
+    const p={x:0,y:0,age:0,maxAge:0};
+    spawnPart(p);
+    p.age=Math.random()*p.maxAge;   // desynchronisieren
+    parts.push(p);
+  }
+}
+
+function rk4(p, dt){
+  const [k1x,k1y]=velocityAt(p.x,p.y);
+  const [k2x,k2y]=velocityAt(p.x+0.5*dt*k1x, p.y+0.5*dt*k1y);
+  const [k3x,k3y]=velocityAt(p.x+0.5*dt*k2x, p.y+0.5*dt*k2y);
+  const [k4x,k4y]=velocityAt(p.x+dt*k3x, p.y+dt*k3y);
+  p.x += dt/6*(k1x+2*k2x+2*k3x+k4x);
+  p.y += dt/6*(k1y+2*k2y+2*k3y+k4y);
+}
+
+function stepParticles(){
+  const ctx=ctxPart;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // Trails ausblenden
+  ctx.globalCompositeOperation='destination-out';
+  ctx.fillStyle='rgba(0,0,0,0.16)';
+  ctx.fillRect(0,0,W,H);
+  if(!layers.part){ ctx.globalCompositeOperation='source-over'; return; }
+  ctx.globalCompositeOperation='lighter';
+  const mX=0.6, mY=0.6;
+  for(const p of parts){
+    const [u,v]=velocityAt(p.x,p.y);
+    const spd=Math.hypot(u,v);
+    let dt=0.016;
+    if(spd*dt>0.05) dt=0.05/spd;          // Schrittweite begrenzen
+    const x0=p.x, y0=p.y;
+    rk4(p,dt);
+    p.age++;
+    // Vernichtung
+    let dead = p.age>p.maxAge ||
+      p.x<world.xmin-mX||p.x>world.xmax+mX||p.y<world.ymin-mY||p.y>world.ymax+mY ||
+      insideCylinder(p.x,p.y,1);
+    if(!dead){
+      for(const s of effSing){
+        if(s.kind==='source'&&s.Q<0&&!s.mirror){
+          const d=Math.hypot(p.x-s.x,p.y-s.y);
+          if(d<0.1){dead=true;break;}
+        }
+      }
+    }
+    if(dead){ spawnPart(p); continue; }
+    // Farbe nach Geschwindigkeit: blau → cyan → gelb → weiß
+    const t=Math.max(0,Math.min(1,spd/(1.8*vRef)));
+    const col=mapColor([[40,80,220],[60,180,255],[255,220,80],[255,255,255]],t);
+    ctx.strokeStyle=`rgba(${col[0]|0},${col[1]|0},${col[2]|0},0.85)`;
+    ctx.lineWidth=1.4;
+    ctx.beginPath();
+    ctx.moveTo(w2sx(x0),w2sy(y0));
+    ctx.lineTo(w2sx(p.x),w2sy(p.y));
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+/* ---------- Layer & Dirty-Handling ---------- */
+const layers={part:true, psi:true, phi:false, speed:false, press:false};
+let dirty=true, dirtyTimer=null;
+
+function markDirty(immediate){
+  if(immediate){ dirty=true; return; }
+  clearTimeout(dirtyTimer);
+  dirtyTimer=setTimeout(()=>{dirty=true;},30);
+}
+
+function frame(){
+  if(dirty){
+    dirty=false;
+    computeGrid();
+    drawHeat();
+    drawLines();
+    updateFormulas();
+  }
+  if(!paused) stepParticles();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Theorie-Panel: F(z), w(z) symbolisch ---------- */
+function fnum(x){ return (Math.round(x*100)/100).toString(); }
+function zStr(e){
+  const s = e.y>=0?`${fnum(e.x)}+${fnum(e.y)}i`:`${fnum(e.x)}−${fnum(Math.abs(e.y))}i`;
+  return `(${s})`;
+}
+function updateFormulas(){
+  const uv=uniformUV();
+  const F=[], Wt=[];
+  if(uv.U>0){
+    const c = uv.v===0 ? fnum(uv.u) : `(${fnum(uv.u)}−${fnum(uv.v)}i)`;
+    F.push(`${c}·z`); Wt.push(`${c}`);
+  }
+  for(const e of elements){
+    if(e.type==='source'){
+      const q=e.params.Q, s=q>=0?'+':'−', aq=fnum(Math.abs(q));
+      F.push(`${s} ${aq}/(2π)·ln(z−${zStr(e)})`);
+      Wt.push(`${s} ${aq}/(2π·(z−${zStr(e)}))`);
+    } else if(e.type==='vortex'){
+      const g=e.params.gamma, s=g>=0?'−':'+', ag=fnum(Math.abs(g));
+      F.push(`${s} i·${ag}/(2π)·ln(z−${zStr(e)})`);
+      Wt.push(`${s} i·${ag}/(2π·(z−${zStr(e)}))`);
+    } else if(e.type==='dipole'){
+      const m=fnum(e.params.m), b=fnum(e.params.angle);
+      F.push(`+ ${m}·e<sup>i·${b}°</sup>/(z−${zStr(e)})`);
+      Wt.push(`− ${m}·e<sup>i·${b}°</sup>/(z−${zStr(e)})<sup>2</sup>`);
+    } else if(e.type==='cylinder'){
+      const m=fnum(uv.U*e.params.r0*e.params.r0);
+      F.push(`+ ${m}/(z−${zStr(e)})  <span class="mir">[Zylinder r₀=${fnum(e.params.r0)}]</span>`);
+      Wt.push(`− ${m}/(z−${zStr(e)})<sup>2</sup>`);
+    }
+  }
+  let fs = F.length? F.join(' ') : '0';
+  let ws = Wt.length? Wt.join(' ') : '0';
+  if(fs.startsWith('+ ')) fs=fs.slice(2);
+  if(ws.startsWith('+ ')) ws=ws.slice(2);
+  const mir = wallList.length? ' <span class="mir">+ Spiegelterme (Wand)</span>':'';
+  document.getElementById('fFormula').innerHTML=`<span class="fn">F(z)</span> = ${fs}${mir}`;
+  document.getElementById('wFormula').innerHTML=`<span class="fn">w(z)</span> = dF/dz = ${ws}${mir}`;
+}
+
+/* ---------- Sidebar ---------- */
+const cardsDiv=document.getElementById('cards');
+
+const PARAM_DEFS={
+  uniform :[ ['U','U∞',0,3,0.01], ['alpha','α [°]',0,360,1] ],
+  source  :[ ['Q','Q',-10,10,0.1] ],
+  vortex  :[ ['gamma','Γ',-10,10,0.1] ],
+  dipole  :[ ['m','m',0.05,5,0.05], ['angle','β [°]',0,360,1] ],
+  cylinder:[ ['r0','r₀',0.2,2.5,0.05] ],
+  wall    :[],
+};
+
+function renderSidebar(){
+  cardsDiv.innerHTML='';
+  if(elements.length===0){
+    cardsDiv.innerHTML='<div class="empty">Noch keine Elemente. Oben in der Toolbar ein Element wählen und auf die Canvas klicken — oder ein Preset laden.</div>';
+    return;
+  }
+  for(const e of elements){
+    const info=TYPE_INFO[e.type];
+    const card=document.createElement('div');
+    card.className='card'+(e.id===selectedId?' sel':'');
+    card.dataset.id=e.id;
+    let title=info.name;
+    if(e.type==='source') title = e.params.Q>=0?'Quelle':'Senke';
+    if(e.type==='wall') title = 'Wand '+(e.params.orientation==='h'?'(horizontal)':'(vertikal)');
+    let html=`<div class="head"><span class="name"><span class="dot" style="color:${info.color}">${info.dot}</span>${title}</span><button class="danger del">✕</button></div>`;
+    for(const [key,lbl,mn,mx,st] of PARAM_DEFS[e.type]){
+      html+=sliderRow(e.id,'p_'+key,lbl,mn,mx,st,e.params[key]);
+    }
+    if(e.type==='wall'){
+      const lim = e.params.orientation==='h'? [world.ymin+0.2,world.ymax-0.2] : [world.xmin+0.2,world.xmax-0.2];
+      html+=sliderRow(e.id,'p_pos','Position',lim[0].toFixed(1),lim[1].toFixed(1),0.05,e.params.pos);
+    }
+    if(e.type!=='uniform'&&e.type!=='wall'){
+      html+=sliderRow(e.id,'px','x',world.xmin.toFixed(1),world.xmax.toFixed(1),0.05,e.x);
+      html+=sliderRow(e.id,'py','y',world.ymin.toFixed(1),world.ymax.toFixed(1),0.05,e.y);
+    }
+    if(e.type==='cylinder'&&uniformUV().U===0)
+      html+='<div class="note">⚠ Zylinder braucht Parallelströmung (U∞ &gt; 0)</div>';
+    if(e.type==='wall'){
+      const uv=uniformUV();
+      const bad = e.params.orientation==='h'? Math.abs(uv.v)>0.01 : Math.abs(uv.u)>0.01;
+      if(bad) html+='<div class="note">⚠ Anströmung hat Komponente senkrecht zur Wand — Spiegelung kompensiert nur Singularitäten</div>';
+      else html+='<div class="note" style="color:var(--muted)">Singularitäten werden gespiegelt (Kap. 9, S. 67)</div>';
+    }
+    card.innerHTML=html;
+    card.addEventListener('mousedown',()=>{ if(selectedId!==e.id){selectedId=e.id; renderSidebar(); drawLines();} });
+    card.querySelector('.del').addEventListener('click',ev=>{ev.stopPropagation(); removeElement(e.id);});
+    for(const inp of card.querySelectorAll('input[type=range]')){
+      inp.addEventListener('input',()=>{
+        const val=parseFloat(inp.value);
+        inp.nextElementSibling.value=val.toFixed(2);
+        const k=inp.dataset.key;
+        if(k==='px') e.x=val;
+        else if(k==='py') e.y=val;
+        else e.params[k.slice(2)]=val;
+        if(e.type==='uniform'||e.type==='wall'){ /* Warnhinweise können sich ändern */ }
+        markDirty(false);
+      });
+    }
+    cardsDiv.appendChild(card);
+  }
+}
+function sliderRow(id,key,lbl,mn,mx,st,val){
+  return `<div class="srow"><label>${lbl}</label>
+    <input type="range" data-key="${key}" min="${mn}" max="${mx}" step="${st}" value="${val}">
+    <output>${(+val).toFixed(2)}</output></div>`;
+}
+
+/* ---------- Toolbar ---------- */
+let pendingPlace=null;
+for(const btn of document.querySelectorAll('[data-place]')){
+  btn.addEventListener('click',()=>{
+    const t=btn.dataset.place;
+    if(pendingPlace===t){ setPlacing(null); return; }
+    setPlacing(t);
+  });
+}
+function setPlacing(t){
+  pendingPlace=t;
+  wrap.classList.toggle('placing',!!t);
+  for(const b of document.querySelectorAll('[data-place]'))
+    b.classList.toggle('active',b.dataset.place===t);
+}
+document.getElementById('addUniform').addEventListener('click',()=>{
+  let u=getUniform();
+  if(!u) u=addElement('uniform',0,0,{U:1,alpha:0});
+  selectedId=u.id; renderSidebar();
+});
+function placeAt(type,x,y){
+  if(type==='source')  addElement('source',x,y,{Q:4});
+  if(type==='sink')    addElement('source',x,y,{Q:-4});
+  if(type==='vortex')  addElement('vortex',x,y,{gamma:5});
+  if(type==='dipole')  addElement('dipole',x,y,{m:1,angle:0});
+  if(type==='cylinder'){
+    if(!getUniform()) addElement('uniform',0,0,{U:1,alpha:0});
+    addElement('cylinder',x,y,{r0:1});
+  }
+  if(type==='wallH') addElement('wall',0,0,{orientation:'h',pos:y});
+  if(type==='wallV') addElement('wall',0,0,{orientation:'v',pos:x});
+}
+
+/* Layer-Toggles */
+function bindToggle(id,key,exclusive){
+  const b=document.getElementById(id);
+  b.addEventListener('click',()=>{
+    layers[key]=!layers[key];
+    if(layers[key]&&exclusive){ layers[exclusive]=false;
+      document.getElementById(exclusive==='speed'?'tglSpeed':'tglPress').classList.remove('on'); }
+    b.classList.toggle('on',layers[key]);
+    if(key==='part'&&!layers.part){
+      ctxPart.setTransform(1,0,0,1,0,0);
+      ctxPart.clearRect(0,0,cvPart.width,cvPart.height);
+    }
+    drawHeat(); drawLines();
+  });
+}
+bindToggle('tglPart','part');
+bindToggle('tglPsi','psi');
+bindToggle('tglPhi','phi');
+bindToggle('tglSpeed','speed','press');
+bindToggle('tglPress','press','speed');
+
+/* Presets */
+document.getElementById('preset').addEventListener('change',ev=>{
+  const v=ev.target.value; ev.target.value='';
+  if(!v) return;
+  elements=[]; selectedId=null; idCounter=1;
+  const add=(t,x,y,p)=>{elements.push({id:idCounter++,type:t,x,y,params:p});};
+  if(v==='zylinder'){ add('uniform',0,0,{U:1,alpha:0}); add('cylinder',0,0,{r0:1.2}); }
+  if(v==='halbkoerper'){ add('uniform',0,0,{U:1,alpha:0}); add('source',-1.5,0,{Q:4}); }
+  if(v==='rankine'){ add('uniform',0,0,{U:1,alpha:0}); add('source',-1.5,0,{Q:4}); add('source',1.5,0,{Q:-4}); }
+  if(v==='magnus'){ add('uniform',0,0,{U:1,alpha:0}); add('cylinder',0,0,{r0:1.2}); add('vortex',0,0,{gamma:-6}); }
+  if(v==='quelleWand'){ add('source',0,1.5,{Q:5}); add('wall',0,0,{orientation:'h',pos:0}); }
+  if(v==='wirbelpaar'){ add('vortex',-1.2,0,{gamma:5}); add('vortex',1.2,0,{gamma:-5}); }
+  renderSidebar(); markDirty(true); initParts();
+});
+document.getElementById('btnReset').addEventListener('click',()=>{
+  elements=[]; selectedId=null; renderSidebar(); markDirty(true); initParts();
+});
+
+/* ---------- Maus-Interaktion auf Canvas ---------- */
+const tooltip=document.getElementById('tooltip');
+let dragging=null;
+
+function hitTest(x,y){
+  // Glyphen (Weltradius ~ 14px)
+  const rw = 14/W*(world.xmax-world.xmin);
+  let best=null, bestD=Infinity;
+  for(const e of elements){
+    if(e.type==='uniform') continue;
+    let d;
+    if(e.type==='wall'){
+      d = e.params.orientation==='h'? Math.abs(y-e.params.pos) : Math.abs(x-e.params.pos);
+      d = Math.max(d, 0.6*rw);      // Wände etwas schwerer zu treffen als Glyphen
+    } else if(e.type==='cylinder'){
+      d = Math.abs(Math.hypot(x-e.x,y-e.y)-e.params.r0);
+      d = Math.min(d, Math.hypot(x-e.x,y-e.y));
+    } else {
+      d = Math.hypot(x-e.x,y-e.y);
+    }
+    if(d<rw && d<bestD){best=e; bestD=d;}
+  }
+  return best;
+}
+
+wrap.addEventListener('mousedown',ev=>{
+  if(ev.button!==0) return;
+  const rect=wrap.getBoundingClientRect();
+  const x=s2wx(ev.clientX-rect.left), y=s2wy(ev.clientY-rect.top);
+  if(pendingPlace){ placeAt(pendingPlace,x,y); setPlacing(null); return; }
+  const e=hitTest(x,y);
+  if(e){
+    dragging=e; selectedId=e.id; renderSidebar(); drawLines();
+  }
+});
+window.addEventListener('mousemove',ev=>{
+  const rect=wrap.getBoundingClientRect();
+  const px=ev.clientX-rect.left, py=ev.clientY-rect.top;
+  const inCanvas = px>=0&&px<=W&&py>=0&&py<=H;
+  const x=s2wx(px), y=s2wy(py);
+  if(dragging){
+    if(dragging.type==='wall')
+      dragging.params.pos = dragging.params.orientation==='h'? y : x;
+    else { dragging.x=x; dragging.y=y; }
+    markDirty(false);
+    syncCardSliders(dragging);
+    return;
+  }
+  if(!inCanvas || ev.target.closest('#sidebar')||ev.target.closest('header')){
+    tooltip.style.display='none'; return;
+  }
+  // Tooltip + Theorie-Panel
+  rebuildEffective();
+  const [u,v]=velocityAt(x,y);
+  const [phi,psi]=phiPsiAt(x,y);
+  const spd=Math.hypot(u,v);
+  const uv=uniformUV();
+  const p=0.5*uv.U*uv.U-0.5*spd*spd;
+  tooltip.style.display='block';
+  tooltip.style.left=(px+16)+'px';
+  tooltip.style.top =(py+14)+'px';
+  tooltip.innerHTML=`<b>Φ</b> ${phi.toFixed(3)} &nbsp;<b>Ψ</b> ${psi.toFixed(3)}<br>`+
+    `<b>u</b> ${u.toFixed(3)} &nbsp;<b>v</b> ${v.toFixed(3)} &nbsp;<b>|w|</b> ${spd.toFixed(3)}<br>`+
+    `<b>p−p∞</b> ${p.toFixed(3)}`;
+  document.getElementById('pvZ').textContent=`${x.toFixed(2)} ${y>=0?'+':'−'} ${Math.abs(y).toFixed(2)}i`;
+  document.getElementById('pvPhi').textContent=phi.toFixed(4);
+  document.getElementById('pvPsi').textContent=psi.toFixed(4);
+  document.getElementById('pvU').textContent=u.toFixed(4);
+  document.getElementById('pvV').textContent=v.toFixed(4);
+  document.getElementById('pvW').textContent=spd.toFixed(4);
+  document.getElementById('pvP').textContent=p.toFixed(4);
+});
+window.addEventListener('mouseup',()=>{
+  if(dragging){ dragging=null; markDirty(true); renderSidebar(); }
+});
+wrap.addEventListener('mouseleave',()=>{ tooltip.style.display='none'; });
+wrap.addEventListener('contextmenu',ev=>{
+  ev.preventDefault();
+  const rect=wrap.getBoundingClientRect();
+  const e=hitTest(s2wx(ev.clientX-rect.left), s2wy(ev.clientY-rect.top));
+  if(e) removeElement(e.id);
+});
+
+function syncCardSliders(e){
+  const card=cardsDiv.querySelector(`.card[data-id="${e.id}"]`);
+  if(!card) return;
+  for(const inp of card.querySelectorAll('input[type=range]')){
+    const k=inp.dataset.key;
+    let val;
+    if(k==='px') val=e.x; else if(k==='py') val=e.y;
+    else val=e.params[k.slice(2)];
+    inp.value=val;
+    inp.nextElementSibling.value=(+val).toFixed(2);
+  }
+}
+
+/* Tastatur */
+window.addEventListener('keydown',ev=>{
+  if(ev.target.tagName==='INPUT'||ev.target.tagName==='SELECT') return;
+  if(ev.code==='Space'){
+    ev.preventDefault();
+    paused=!paused;
+    document.getElementById('pauseBadge').style.display=paused?'block':'none';
+  }
+  if(ev.code==='Escape') setPlacing(null);
+});
+
+/* ---------- Start ---------- */
+window.addEventListener('resize',resize);
+resize();
+// Startkonfiguration: umströmter Zylinder
+elements=[
+  {id:idCounter++,type:'uniform',x:0,y:0,params:{U:1,alpha:0}},
+  {id:idCounter++,type:'cylinder',x:0,y:0,params:{r0:1.2}},
+];
+renderSidebar();
+rebuildEffective();
+initParts();
+markDirty(true);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

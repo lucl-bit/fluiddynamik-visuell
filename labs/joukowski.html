@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  h1 { text-align: center; font-size: 15px; padding: 8px; color: #7eb8f7; letter-spacing: 1px; font-weight: 400; }
+  .subtitle { text-align: center; font-size: 11px; color: #888; margin-bottom: 4px; }
+  .panels { display: flex; flex: 1; gap: 8px; padding: 0 10px 4px; min-height: 0; }
+  .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .panel-label { text-align: center; font-size: 11px; color: #aaa; margin-bottom: 3px; }
+  canvas { border: 1px solid #333; border-radius: 6px; background: #080b10; width: 100%; flex: 1; min-height: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 10px 6px; justify-content: center; }
+  .ctrl { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .ctrl label { font-size: 10px; color: #aaa; }
+  .ctrl span { font-size: 11px; color: #7eb8f7; font-weight: bold; min-width: 40px; text-align: center; }
+  input[type=range] { width: 110px; accent-color: #7eb8f7; }
+  .legend { display: flex; gap: 12px; justify-content: center; padding: 2px 10px 4px; flex-wrap: wrap; }
+  .leg { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #aaa; }
+  .dot { width: 14px; height: 3px; border-radius: 2px; }
+  .info-box { background: #1a1f2e; border: 1px solid #2a3050; border-radius: 5px; margin: 0 10px 4px; padding: 4px 12px; font-size: 10px; color: #b0c0d8; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Konforme Abbildung — Joukowski-Transformation &nbsp; ζ = z + a²/z</h1>
+<div class="info-box" id="infobox">Kreis in z-Ebene → Joukowski-Profil in ζ-Ebene</div>
+<div class="panels">
+  <div class="panel">
+    <div class="panel-label">z-Ebene (Originalraum)</div>
+    <canvas id="zCanvas"></canvas>
+  </div>
+  <div class="panel">
+    <div class="panel-label">ζ-Ebene (Bildraum — transformiert)</div>
+    <canvas id="zetaCanvas"></canvas>
+  </div>
+</div>
+<div class="legend">
+  <div class="leg"><div class="dot" style="background:#3a8fff"></div>Kreis / Profil</div>
+  <div class="leg"><div class="dot" style="background:#ff6b35"></div>Stromlinie Ψ=const</div>
+  <div class="leg"><div class="dot" style="background:#44cc88"></div>Potentiallinie Φ=const</div>
+  <div class="leg"><div class="dot" style="background:#ffcc00"></div>Singuläre Punkte ±a</div>
+</div>
+<div class="controls">
+  <div class="ctrl">
+    <label>a (Parameter)</label>
+    <input type="range" id="aParam" min="0.3" max="1.1" step="0.01" value="0.8">
+    <span id="aVal">0.80</span>
+  </div>
+  <div class="ctrl">
+    <label>Mittelpunkt Δx</label>
+    <input type="range" id="cx" min="-0.35" max="0.0" step="0.005" value="-0.12">
+    <span id="cxVal">−0.12</span>
+  </div>
+  <div class="ctrl">
+    <label>Mittelpunkt Δy</label>
+    <input type="range" id="cy" min="-0.2" max="0.2" step="0.005" value="0.06">
+    <span id="cyVal">+0.06</span>
+  </div>
+</div>
+<script>
+const zC = document.getElementById('zCanvas');
+const zetaC = document.getElementById('zetaCanvas');
+const zCtx = zC.getContext('2d');
+const zetaCtx = zetaC.getContext('2d');
+
+let a = 0.8, cx = -0.12, cy = 0.06;
+
+function joukowski(zr, zi) {
+  const mag2 = zr*zr + zi*zi;
+  if (mag2 < 1e-9) return [1e9, 1e9];
+  const a2 = a * a;
+  return [zr + a2 * zr / mag2, zi - a2 * zi / mag2];
+}
+
+function toScreen(canvas, xr, xi, scale) {
+  return [canvas.width/2 + xr * scale, canvas.height/2 - xi * scale];
+}
+
+function resize() {
+  [zC, zetaC].forEach(c => {
+    const parent = c.parentElement;
+    const rect = parent.getBoundingClientRect();
+    c.width = Math.floor(rect.width);
+    c.height = Math.floor(rect.height - 26);
+  });
+  draw();
+}
+
+function drawAxes(ctx, scale) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  ctx.strokeStyle = '#2a3a4a';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+  ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#445566';
+  ctx.font = '9px monospace';
+  for (let v = -3; v <= 3; v++) {
+    if (v === 0) continue;
+    const sx = W/2 + v * scale;
+    const sy = H/2 - v * scale;
+    if (sx > 5 && sx < W-5) ctx.fillText(v, sx - 4, H/2 + 11);
+    if (sy > 5 && sy < H-5) ctx.fillText(v, W/2 + 3, sy + 4);
+  }
+}
+
+function drawGridLines(ctx, isZeta, scale) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const step = 0.22;
+  const range = 4;
+  const pts = 200;
+
+  // Horizontal lines in original space → stream lines
+  ctx.lineWidth = 0.9;
+  for (let k = -20; k <= 20; k++) {
+    const psi = k * step;
+    ctx.strokeStyle = Math.abs(psi) < 0.01 ? '#ff6b3599' : '#ff6b3530';
+    ctx.beginPath();
+    let first = true;
+    for (let j = 0; j <= pts; j++) {
+      const t = -range + j * 2 * range / pts;
+      let pr = t, pi = psi;
+      if (isZeta) {
+        [pr, pi] = joukowski(t, psi);
+        if (!isFinite(pr) || !isFinite(pi) || Math.abs(pr) > 20 || Math.abs(pi) > 20) { first = true; continue; }
+      }
+      const [sx, sy] = toScreen(ctx.canvas, pr, pi, scale);
+      if (sx < -10 || sx > W+10 || sy < -10 || sy > H+10) { first = true; continue; }
+      if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+
+  // Vertical lines → potential lines
+  for (let k = -20; k <= 20; k++) {
+    const phi = k * step;
+    ctx.strokeStyle = Math.abs(phi) < 0.01 ? '#44cc8899' : '#44cc8828';
+    ctx.beginPath();
+    let first = true;
+    for (let j = 0; j <= pts; j++) {
+      const t = -range + j * 2 * range / pts;
+      let pr = phi, pi = t;
+      if (isZeta) {
+        [pr, pi] = joukowski(phi, t);
+        if (!isFinite(pr) || !isFinite(pi) || Math.abs(pr) > 20 || Math.abs(pi) > 20) { first = true; continue; }
+      }
+      const [sx, sy] = toScreen(ctx.canvas, pr, pi, scale);
+      if (sx < -10 || sx > W+10 || sy < -10 || sy > H+10) { first = true; continue; }
+      if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+}
+
+function getRadius() {
+  // Standardkonstruktion: der Kreis läuft genau durch den kritischen Punkt z = +a
+  // (dort entsteht die scharfe Hinterkante), z = -a liegt im Innern.
+  return Math.sqrt((a - cx) * (a - cx) + cy * cy);
+}
+
+function drawCircleZ(ctx, scale) {
+  const R = getRadius();
+  ctx.strokeStyle = '#3a8fff';
+  ctx.lineWidth = 2.5;
+  ctx.fillStyle = '#3a8fff12';
+  ctx.beginPath();
+  for (let i = 0; i <= 360; i++) {
+    const t = i * Math.PI / 180;
+    const xr = cx + R * Math.cos(t);
+    const xi = cy + R * Math.sin(t);
+    const [sx, sy] = toScreen(ctx.canvas, xr, xi, scale);
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Mittelpunkt
+  const [mx, my] = toScreen(ctx.canvas, cx, cy, scale);
+  ctx.fillStyle = '#3a8fff';
+  ctx.beginPath(); ctx.arc(mx, my, 3, 0, 2*Math.PI); ctx.fill();
+
+  // ±a markers
+  [[a, 0], [-a, 0]].forEach(([xr, xi]) => {
+    const [sx, sy] = toScreen(ctx.canvas, xr, xi, scale);
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 2*Math.PI); ctx.fill();
+  });
+  ctx.fillStyle = '#ffcc00aa';
+  ctx.font = '10px monospace';
+  const [ax, ay] = toScreen(ctx.canvas, a, 0, scale);
+  ctx.fillText('+a', ax+6, ay-4);
+  const [nax, nay] = toScreen(ctx.canvas, -a, 0, scale);
+  ctx.fillText('-a', nax+6, nay-4);
+}
+
+function drawProfile(ctx, scale) {
+  const R = getRadius();
+  ctx.strokeStyle = '#3a8fff';
+  ctx.lineWidth = 2.5;
+  ctx.fillStyle = '#3a8fff15';
+  ctx.beginPath();
+  let first = true;
+  for (let i = 0; i <= 362; i++) {
+    const t = i * Math.PI / 180;
+    const zr = cx + R * Math.cos(t);
+    const zi = cy + R * Math.sin(t);
+    const [xr, xi] = joukowski(zr, zi);
+    if (!isFinite(xr) || !isFinite(xi)) { first = true; continue; }
+    const [sx, sy] = toScreen(ctx.canvas, xr, xi, scale);
+    if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Transform singular points ±a
+  [[a, 0], [-a, 0]].forEach(([zr, zi]) => {
+    const [xr, xi] = joukowski(zr, zi);
+    const [sx, sy] = toScreen(ctx.canvas, xr, xi, scale);
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 2*Math.PI); ctx.fill();
+  });
+  ctx.fillStyle = '#ffcc00aa';
+  ctx.font = '10px monospace';
+  const [x2a] = joukowski(a, 0);
+  const [sx2, sy2] = toScreen(ctx.canvas, x2a, 0, scale);
+  ctx.fillText('f\'=0', sx2+6, sy2-4);
+}
+
+function draw() {
+  const scaleZ = Math.min(zC.width, zC.height) / 5.5;
+  const scaleZeta = Math.min(zetaC.width, zetaC.height) / 6.5;
+
+  zCtx.clearRect(0, 0, zC.width, zC.height);
+  zetaCtx.clearRect(0, 0, zetaC.width, zetaC.height);
+
+  drawAxes(zCtx, scaleZ);
+  drawGridLines(zCtx, false, scaleZ);
+  drawCircleZ(zCtx, scaleZ);
+
+  drawAxes(zetaCtx, scaleZeta);
+  drawGridLines(zetaCtx, true, scaleZeta);
+  drawProfile(zetaCtx, scaleZeta);
+
+  // Labels
+  const lblStyle = '#7eb8f7cc';
+  zCtx.fillStyle = lblStyle; zCtx.font = '11px serif';
+  zCtx.fillText('Re(z)', zC.width - 52, zC.height/2 - 6);
+  zCtx.fillText('Im(z)', zC.width/2 + 5, 14);
+
+  zetaCtx.fillStyle = lblStyle; zetaCtx.font = '11px serif';
+  zetaCtx.fillText('Re(ζ)', zetaC.width - 52, zetaC.height/2 - 6);
+  zetaCtx.fillText('Im(ζ)', zetaC.width/2 + 5, 14);
+
+  const R = getRadius();
+  const enclosed = R > (a - cx) - 0.002;
+  document.getElementById('infobox').innerHTML =
+    `R = ${R.toFixed(3)} &nbsp;|&nbsp; Mittelpunkt (${cx.toFixed(2)}, ${cy.toFixed(2)}) &nbsp;|&nbsp; a = ${a.toFixed(2)} &nbsp;|&nbsp; ` +
+    `Kreis enthält ±a: <b style="color:${enclosed?'#7ef77e':'#f77e7e'}">${enclosed?'✓ → Profil':'✗ → Ellipse'}</b> &nbsp;|&nbsp; ` +
+    `<span style="color:#ff6b35">Orange = Stromlinie</span> &nbsp;<span style="color:#44cc88">Grün = Potentiallinie</span>`;
+}
+
+document.getElementById('aParam').addEventListener('input', e => {
+  a = parseFloat(e.target.value);
+  document.getElementById('aVal').textContent = a.toFixed(2);
+  draw();
+});
+document.getElementById('cx').addEventListener('input', e => {
+  cx = parseFloat(e.target.value);
+  document.getElementById('cxVal').textContent = (cx >= 0 ? '+' : '') + cx.toFixed(2);
+  draw();
+});
+document.getElementById('cy').addEventListener('input', e => {
+  cy = parseFloat(e.target.value);
+  document.getElementById('cyVal').textContent = (cy >= 0 ? '+' : '') + cy.toFixed(2);
+  draw();
+});
+
+window.addEventListener('resize', resize);
+setTimeout(resize, 80);
+</script>
+</body>
+</html>
