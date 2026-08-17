@@ -17,7 +17,8 @@ function slice(file, from, to) {
 
 console.log('=== 1) Syntax aller ausgelieferten Dateien ===');
 for (const f of ['js/core.js','js/modules/wirbel.js','js/modules/wirbellinien.js','js/modules/kanal.js','js/modules/freistrahl.js','js/modules/wirbelstreckung.js',
-                 'js/modules/wirbelring.js','js/modules/stoss.js','js/modules/lavalduese.js','js/modules/linien.js','js/modules/potentiallab.js','js/modules/joukowski.js','js/modules/roadmap.js']) {
+                 'js/modules/wirbelring.js','js/modules/stoss.js','js/modules/lavalduese.js','js/modules/linien.js','js/modules/potentiallab.js','js/modules/joukowski.js','js/modules/roadmap.js',
+                 'js/modules/biotsavart.js','js/modules/tragfluegel.js']) {
   new Function(fs.readFileSync(D + f, 'utf8'));   // wirft bei Syntaxfehler
   console.log('  PASS  ' + f); pass++;
 }
@@ -567,6 +568,173 @@ console.log(' Druckverlauf auf der Achse:');
   chk('Druck pendelt zwischen zwei Werten', st[2].nach, st[0].nach, 1e-12);
 }
 chk('script-Tag freistrahl.js in index.html', html.includes('js/modules/freistrahl.js'), true);
+
+console.log();
+console.log('=== 10) biotsavart.js — Linienintegral gegen die geschlossenen Formeln ===');
+const physBS = slice('js/modules/biotsavart.js', 'function vAdd', '/* ---------------- Einstieg');
+const BS = new Function(physBS +
+  '; return {bsPoly,bsSeg,bsRay,bsLine,ringAxis,arcPts,segPts,geoSchirm,geoFluegel,geoRinge,vLen,vAdd};')();
+const GBS = 4 * Math.PI;                 // wie im Modul: damit Gamma/(4 pi) = 1
+
+console.log(' Gerades Fadenstueck — Numerik gegen Gamma/(4 pi r)(cos t1 - cos t2):');
+{
+  const a = [-3,0,0], b = [3,0,0];
+  for (const X of [[0,1.5,1.2], [1.1,0.4,-0.9], [-2.0,2.2,0.3]]) {
+    const uN = BS.bsPoly(BS.segPts(a,b,4000), GBS, X), uE = BS.bsSeg(a,b,GBS,X);
+    chk(`  Betrag bei x=(${X})`, BS.vLen(uN), BS.vLen(uE), 1e-5);
+    for (let k = 0; k < 3; k++) chk(`    Komponente ${'uvw'[k]}`, uN[k], uE[k], 1e-5);
+  }
+}
+
+console.log(' Die drei Faelle, die man auswendig koennen muss:');
+{
+  const r = 1.3;
+  chk('unendlicher Faden   = Gamma/(2 pi r)',
+      BS.vLen(BS.bsLine([0,0,0],[1,0,0],GBS,[0,r,0])), GBS/(2*Math.PI*r), 1e-12);
+  chk('halbunendlich       = Gamma/(4 pi r)',
+      BS.vLen(BS.bsRay([0,0,0],[1,0,0],GBS,[0,r,0])), GBS/(4*Math.PI*r), 1e-12);
+  chk('  Verhaeltnis exakt 2 (der Faktor 1/2)',
+      BS.vLen(BS.bsLine([0,0,0],[1,0,0],GBS,[0,r,0])) / BS.vLen(BS.bsRay([0,0,0],[1,0,0],GBS,[0,r,0])), 2, 1e-12);
+  // Grenzuebergang: ein endliches Stueck laeuft in den unendlichen hinein
+  const lang = BS.bsSeg([-4000,0,0],[4000,0,0],GBS,[0,r,0]);
+  chk('endliches Stueck, 3000-fache Laenge -> unendlich', BS.vLen(lang), GBS/(2*Math.PI*r), 1e-6);
+}
+
+console.log(' Kreisring auf der eigenen Achse:');
+{
+  const R = 1.7, ring = BS.arcPts([0,0,0],[1,0,0],[0,1,0],R,0,2*Math.PI,6000);
+  chk('im Zentrum = Gamma/(2R)', BS.bsPoly(ring,GBS,[0,0,0])[2], GBS/(2*R), 1e-6);
+  chk('bei z = 1.1 = Gamma R^2/(2(R^2+z^2)^1.5)', BS.bsPoly(ring,GBS,[0,0,1.1])[2], BS.ringAxis(R,1.1,GBS), 1e-6);
+  chk('Formel im Zentrum stimmt mit sich selbst', BS.ringAxis(R,0,GBS), GBS/(2*R), 1e-14);
+}
+
+console.log(' Pruefungsgeometrie Gleitschirm (Kreissegment in der y-z-Ebene):');
+{
+  const a = 1.0, g = BS.geoSchirm(a), e = g.uW3exact(GBS), n = g.uW3num(GBS);
+  chk('u  numerisch = geschlossen', n[0], e[0], 1e-5);
+  chk('v  numerisch = geschlossen', n[1], e[1], 1e-5);
+  chk('w  numerisch = geschlossen', n[2], e[2], 1e-5);
+  chk('u = -Gamma/(32a)',            e[0], -GBS/(32*a), 1e-12);
+  chk('v = -sqrt2 Gamma/(16 pi a)',  e[1], -Math.SQRT2*GBS/(16*Math.PI*a), 1e-12);
+  chk('w = 0 (Symmetrie des Bogens)', e[2], 0, 1e-12);
+  chk('v < 0 — der Schirm fliegt im eigenen Abwind', e[1] < 0, true);
+  // |r| ist ueber den ganzen Bogen konstant — das traegt die ganze Rechnung
+  const pts = g.arc(400);
+  const rs = pts.map(p => BS.vLen([g.P[0]-p[0], g.P[1]-p[1], g.P[2]-p[2]]));
+  chk('|r| konstant ueber den Bogen', Math.max(...rs)-Math.min(...rs), 0, 1e-12);
+  chk('|r| = sqrt(2) R', rs[0], Math.SQRT2*g.R, 1e-12);
+}
+
+console.log(' Pruefungsgeometrie Tragfluegel (Kreissegment in der xy-Ebene):');
+{
+  const R = 1.4, a = 0.9, g = BS.geoFluegel(R,a), e = g.uW2exact(GBS), n = g.uW2num(GBS);
+  chk('u  numerisch = geschlossen', n[0], e[0], 1e-5);
+  chk('v  numerisch = geschlossen', n[1], e[1], 1e-5);
+  chk('w  numerisch = geschlossen', n[2], e[2], 1e-5);
+  const k = GBS*R/(4*Math.PI*Math.pow(R*R+a*a,1.5));
+  chk('u = -sqrt2 a k', e[0], -Math.SQRT2*a*k, 1e-12);
+  chk('v = 0 (sin-Integral verschwindet)', e[1], 0, 1e-12);
+  chk('w = k pi R/2', e[2], k*Math.PI*R/2, 1e-12);
+  const pts = g.arc(400);
+  const rs = pts.map(p => BS.vLen([g.P[0]-p[0], g.P[1]-p[1], g.P[2]-p[2]]));
+  chk('|r| konstant ueber den Bogen', Math.max(...rs)-Math.min(...rs), 0, 1e-12);
+  chk('|r| = sqrt(R^2 + a^2)', rs[0], Math.sqrt(R*R+a*a), 1e-12);
+}
+
+console.log(' Pruefungsgeometrie zwei koaxiale Ringe:');
+{
+  const R1 = 1.3, R2 = 0.85, L = 1.4, g = BS.geoRinge(R1,R2,L,GBS);
+  chk('Ring 1 durch sich selbst = Gamma/(2R1)', g.atRing1.self, GBS/(2*R1), 1e-14);
+  chk('Ring 2 durch sich selbst = Gamma/(2R2)', g.atRing2.self, GBS/(2*R2), 1e-14);
+  chk('Ring 1 durch Ring 2', g.atRing1.other, GBS*R2*R2/(2*Math.pow(R2*R2+L*L,1.5)), 1e-14);
+  chk('der kleinere Ring ist schneller', g.v2 > g.v1, true);
+}
+chk('script-Tag biotsavart.js in index.html', html.includes('js/modules/biotsavart.js'), true);
+
+console.log();
+console.log('=== 11) tragfluegel.js — Traglinie, Abwind, Beiwerte ===');
+const physTF = slice('js/modules/tragfluegel.js', 'function tAdd', '/* ---------------- Einstieg');
+const TF = new Function(physTF +
+  '; return {liftingLine,glauert,downwashG,gammaG,downwashRaw,downwashHorseshoe,downwashElliptic,forcesG,coeffs,section,gammaOf};')();
+
+console.log(' Einzelhufeisen — Abwind aus den beiden Randwirbeln:');
+{
+  const b = 3.0, Gm = 1.6;
+  const sysR = TF.liftingLine(b,Gm,'rect',20);
+  chk('w(0) = -Gamma/(pi b)', TF.downwashRaw(sysR,0), -Gm/(Math.PI*b), 1e-12);
+  chk('  Simulation = geschlossene Formel', TF.downwashRaw(sysR,0), TF.downwashHorseshoe(b,Gm,0), 1e-12);
+  chk('w(0.6) ebenso', TF.downwashRaw(sysR,0.6), TF.downwashHorseshoe(b,Gm,0.6), 1e-12);
+  chk('Abwind zeigt nach unten', TF.downwashHorseshoe(b,Gm,0) < 0, true);
+  chk('  und divergiert an der Spitze',
+      Math.abs(TF.downwashHorseshoe(b,Gm,0.999*b/2)) > 20*Math.abs(TF.downwashHorseshoe(b,Gm,0)), true);
+}
+
+console.log(' Elliptische Verteilung — Abwind ueber die ganze Spannweite konstant:');
+{
+  const b = 3.0, G0 = 1.6, gl = TF.glauert(b,G0,'ell',24);
+  chk('nur G_1 ist besetzt', Math.abs(gl.Gn[2]) + Math.abs(gl.Gn[3]) + Math.abs(gl.Gn[4]), 0, 1e-12);
+  chk('G_1 = Gamma_0', gl.Gn[1], G0, 1e-9);
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i <= 200; i++) { const w = TF.downwashG(gl, (-1+2*i/200)*b/2); mn = Math.min(mn,w); mx = Math.max(mx,w); }
+  chk('w schwankt nicht (inkl. Fluegelspitzen)', mx-mn, 0, 1e-9);
+  chk('w = -Gamma_0/(2b)', TF.downwashG(gl,0), TF.downwashElliptic(b,G0), 1e-9);
+  chk('  auch exakt an der Spitze', TF.downwashG(gl,b/2), TF.downwashElliptic(b,G0), 1e-9);
+  chk('Gamma(0) = Gamma_0', TF.gammaG(gl,0), G0, 1e-9);
+  chk('Gamma(0.6 b/2) = Gamma_0 sqrt(1-0.36)', TF.gammaG(gl,0.6*b/2), G0*Math.sqrt(1-0.36), 1e-9);
+  chk('Gamma an der Spitze = 0', TF.gammaG(gl,b/2), 0, 1e-9);
+}
+
+console.log(' Auftrieb und induzierter Widerstand aus der Reihe:');
+{
+  const b = 3.0, G0 = 1.6, gl = TF.glauert(b,G0,'ell',24), F = TF.forcesG(gl,1.0);
+  chk('L = rho u_inf pi b G_1/4', F.L, G0*Math.PI*b/4, 1e-8);
+  chk('D = rho pi/8 G_0^2',        F.D, G0*G0*Math.PI/8, 1e-8);
+  chk('D/L = |w|/u_inf = alpha_i', F.D/F.L, Math.abs(TF.downwashElliptic(b,G0)), 1e-9);
+  // die Beiwertformel des Skripts, S. 91
+  const A = b*0.5, LAM = b*b/A, cA = F.L/(0.5*A), cW = F.D/(0.5*A);
+  chk('c_W,ind = c_A^2/(pi Lambda)', cW, cA*cA/(Math.PI*LAM), 1e-9);
+}
+
+console.log(' Elliptisch ist das Optimum (gleicher Auftrieb, kleinster Widerstand):');
+{
+  const b = 3.0;
+  const rel = (k, m) => { const g = TF.glauert(b,1,k,m), f = TF.forcesG(g,1.0); return f.D/(f.L*f.L); };
+  chk('parabolisch kostet mehr', rel('par',24) > rel('ell',24), true);
+  // Der Zuschlag ist exakt 1/8. Analytisch: fuer Gamma ~ sin^2(theta) ist
+  // G_n/G_1 = -3/(n(n^2-4)) fuer ungerade n, und D/L^2 traegt
+  // sum_{n=3,5,...} 9/(n(n^2-4)^2) = 0.125 ueber den elliptischen Wert hinaus.
+  // Die abgeschnittene Reihe naehert sich dem von unten:
+  chk('  Zuschlag bei M=24  Reihengliedern', rel('par',24)/rel('ell',24), 1.125, 1e-4);
+  chk('  Zuschlag bei M=200 Reihengliedern', rel('par',200)/rel('ell',200), 1.125, 1e-8);
+  chk('  monotone Konvergenz gegen 1.125',
+      rel('par',24)/rel('ell',24) < rel('par',200)/rel('ell',200), true);
+}
+
+console.log(' Profilschnitt nach Abb. 10.9:');
+{
+  const S = TF.section(1.0, -0.18, 1.0);
+  chk('alpha_i = atan(|v|/u_inf)', S.alphaI, Math.atan(0.18), 1e-12);
+  chk('F_y^2 + F_x^2 = F_res^2',   S.Fy*S.Fy + S.Fx*S.Fx, 1, 1e-12);
+  chk('F_x/F_y = tan(alpha_i)',    S.Fx/S.Fy, 0.18, 1e-12);
+  chk('ohne Abwind ist F_x = 0 (d Alembert)', TF.section(1.0,0,1.0).Fx, 0, 1e-15);
+  chk('  und F_y = F_res',                    TF.section(1.0,0,1.0).Fy, 1, 1e-15);
+  chk('u_eff > u_inf', S.ueff > 1.0, true);
+}
+
+console.log(' Beiwerte, Skript S. 91:');
+{
+  const c = TF.coeffs(0.8, 9);
+  chk('c_W,ind = c_A^2/(pi Lambda)', c.cWi, 0.64/(Math.PI*9), 1e-14);
+  chk('alpha_i = c_A/(pi Lambda)',   c.alphaI, 0.8/(Math.PI*9), 1e-14);
+  chk('c_W,ind = c_A * alpha_i',     c.cWi, 0.8*c.alphaI, 1e-14);
+  // Segelflieger gegen Delta: die Streckung schlaegt voll durch
+  chk('Lambda 25 gegen Lambda 2 — Faktor 12.5',
+      TF.coeffs(0.8,2).cWi / TF.coeffs(0.8,25).cWi, 12.5, 1e-12);
+  // grosse Spannweite bei festem Gamma: der Abwind faellt wie 1/b
+  const w1 = Math.abs(TF.downwashElliptic(3,1.6)), w2 = Math.abs(TF.downwashElliptic(30,1.6));
+  chk('b verzehnfacht -> Abwind ein Zehntel', w2/w1, 0.1, 1e-14);
+}
+chk('script-Tag tragfluegel.js in index.html', html.includes('js/modules/tragfluegel.js'), true);
 
 console.log();
 console.log(fail === 0 ? `ALLE ${pass} PRUEFUNGEN BESTANDEN` : `${fail} FEHLGESCHLAGEN, ${pass} bestanden`);

@@ -208,7 +208,10 @@ var FV = (function () {
     if (rafId !== null) return;
     var t0 = performance.now();
     function step(now) {
-      var t = (now - t0) / 1000;
+      // Der rAF-Zeitstempel bezieht sich auf den Beginn des laufenden Frames.
+      // Wurde ensureRaf mitten im Frame aufgerufen, liegt er VOR t0 und t
+      // würde negativ — was jede Rechnung der Art floor(t·n) auf −1 schickt.
+      var t = Math.max(0, (now - t0) / 1000);
       lastT = t;
       for (var i = 0; i < loops.length; i++) loops[i](t);
       rafId = requestAnimationFrame(step);
@@ -351,6 +354,334 @@ var FV = (function () {
     ctx.restore();
   }
 
+  /* ---------- 3D-Vektoren ---------- */
+
+  var V3 = {
+    add: function (a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; },
+    sub: function (a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; },
+    mul: function (a, s) { return [a[0] * s, a[1] * s, a[2] * s]; },
+    dot: function (a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; },
+    cross: function (a, b) {
+      return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    },
+    len: function (a) { return Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]); },
+    unit: function (a) { var L = V3.len(a); return L < 1e-12 ? [0, 0, 0] : [a[0] / L, a[1] / L, a[2] / L]; }
+  };
+
+  /* ---------- Drehbare 3D-Szene ----------
+     Orthographische Projektion, bewusst ohne Perspektive: Winkel und Längen
+     sollen ablesbar bleiben. Tiefensortierung nach Painter's Algorithm über
+     die mittlere Tiefe jedes Objekts — für Wirbelfäden und Achsenkreuze reicht das.
+     o: {aspect, span, azim, elev, cap, animate, draw(S, t), pick()}
+  */
+
+  function scene3d(o) {
+    var cam0 = { azim: o.azim === undefined ? 0.62 : o.azim,
+                 elev: o.elev === undefined ? 0.38 : o.elev, zoom: 1 };
+    var cam = { azim: cam0.azim, elev: cam0.elev, zoom: 1 };
+    var span = o.span || 6;                 // Weltbreite, die ins Bild passen soll
+    var queue = [], ctxRef = null;
+    var right = [1, 0, 0], upv = [0, 1, 0], fwd = [0, 0, -1];
+    var cx = 0, cy = 0, sc = 1;
+
+    function setCam(w, hgt) {
+      var ce = Math.cos(cam.elev), se = Math.sin(cam.elev);
+      var ca = Math.cos(cam.azim), sa = Math.sin(cam.azim);
+      var eye = [ce * sa, se, ce * ca];     // Richtung Ursprung → Kamera
+      fwd = V3.mul(eye, -1);
+      right = V3.unit(V3.cross([0, 1, 0], eye));
+      if (V3.len(right) < 1e-9) right = [1, 0, 0];
+      upv = V3.cross(eye, right);
+      sc = w / span * cam.zoom;
+      cx = w * (o.ox === undefined ? 0.5 : o.ox);
+      cy = hgt * (o.oy === undefined ? 0.5 : o.oy);
+    }
+
+    function P(p) { return [cx + sc * V3.dot(p, right), cy - sc * V3.dot(p, upv)]; }
+    function depth(p) { return V3.dot(p, fwd); }        // grösser = weiter weg
+
+    function push(z, fn) { queue.push({ z: z, f: fn }); }
+    function lay(style, z) {
+      if (!style) return z;
+      if (style.layer === 'front') return -1e9;
+      if (style.layer === 'back') return 1e9;
+      return z;
+    }
+
+    var S = {
+      P: P, depth: depth, V: V3,
+      get ctx() { return ctxRef; },
+      get scale() { return sc; },
+      cam: cam,
+
+      /* Rohzugriff: eigene Zeichnung mit selbst gewählter Tiefe */
+      raw: function (z, fn) { push(z, fn); },
+
+      poly3: function (pts, st) {
+        st = st || {};
+        var pp = pts.map(P), zm = 0;
+        pts.forEach(function (p) { zm += depth(p); });
+        zm /= Math.max(pts.length, 1);
+        push(lay(st, zm), function (ctx) {
+          ctx.save();
+          ctx.strokeStyle = st.color || '#c8d3de';
+          ctx.lineWidth = st.width || 1.6;
+          ctx.globalAlpha = st.alpha === undefined ? 1 : st.alpha;
+          if (st.dash) ctx.setLineDash(st.dash);
+          ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+          ctx.beginPath();
+          pp.forEach(function (q, i) { i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+          ctx.stroke(); ctx.restore();
+        });
+      },
+
+      line3: function (a, b, st) { S.poly3([a, b], st); },
+
+      fill3: function (pts, st) {
+        st = st || {};
+        var pp = pts.map(P), zm = 0;
+        pts.forEach(function (p) { zm += depth(p); });
+        zm /= Math.max(pts.length, 1);
+        push(lay(st, zm), function (ctx) {
+          ctx.save();
+          ctx.fillStyle = st.color || '#1b2735';
+          ctx.globalAlpha = st.alpha === undefined ? 1 : st.alpha;
+          ctx.beginPath();
+          pp.forEach(function (q, i) { i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
+          ctx.closePath(); ctx.fill();
+          if (st.stroke) {
+            ctx.globalAlpha = 1; ctx.strokeStyle = st.stroke;
+            ctx.lineWidth = st.width || 1.2; ctx.stroke();
+          }
+          ctx.restore();
+        });
+      },
+
+      arrow3: function (a, b, st) {
+        st = st || {};
+        var pa = P(a), pb = P(b);
+        var zm = (depth(a) + depth(b)) / 2;
+        push(lay(st, zm), function (ctx) {
+          ctx.save();
+          ctx.globalAlpha = st.alpha === undefined ? 1 : st.alpha;
+          if (st.dash) ctx.setLineDash(st.dash);
+          arrow(ctx, pa[0], pa[1], pb[0], pb[1], st.color || '#c8d3de', st.width || 1.8, st.head || 9);
+          ctx.restore();
+        });
+      },
+
+      /* Bogen in der von u und v aufgespannten Ebene um c, Winkel a0…a1 */
+      arcPts: function (c, u, v, r, a0, a1, n) {
+        n = n || 48; var out = [];
+        for (var i = 0; i <= n; i++) {
+          var a = a0 + (a1 - a0) * i / n;
+          out.push(V3.add(c, V3.add(V3.mul(u, r * Math.cos(a)), V3.mul(v, r * Math.sin(a)))));
+        }
+        return out;
+      },
+      arc3: function (c, u, v, r, a0, a1, st) { S.poly3(S.arcPts(c, u, v, r, a0, a1, st && st.n), st); },
+
+      point3: function (p, st) {
+        st = st || {};
+        var q = P(p), z = depth(p);
+        push(lay(st, z), function (ctx) {
+          ctx.save();
+          ctx.fillStyle = st.color || '#fff';
+          ctx.beginPath(); ctx.arc(q[0], q[1], st.r || 4, 0, 6.2832); ctx.fill();
+          if (st.ring) {
+            ctx.strokeStyle = st.ring; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(q[0], q[1], (st.r || 4) + 3.5, 0, 6.2832); ctx.stroke();
+          }
+          ctx.restore();
+        });
+      },
+
+      label3: function (p, txt, st) {
+        st = st || {};
+        var q = P(p), z = depth(p);
+        push(lay(st, z - 1e-6), function (ctx) {
+          text(ctx, q[0] + (st.dx || 0), q[1] + (st.dy || 0), txt,
+               { color: st.color || '#c8d3de', font: st.font || '12px -apple-system, sans-serif',
+                 align: st.align || 'left', baseline: st.baseline || 'middle' });
+        });
+      },
+
+      /* Wirbelfaden: dicke Linie plus Pfeilspitzen in Richtung von Γ */
+      filament3: function (pts, st) {
+        st = st || {};
+        S.poly3(pts, { color: st.color || '#e08a3c', width: st.width || 3.2,
+                       alpha: st.alpha, layer: st.layer, dash: st.dash });
+        // Pfeilspitzen mit fester Bildgrösse: die Segmente sind zu kurz für arrow()
+        var nH = st.heads || 3;
+        for (var k = 1; k <= nH; k++) {
+          var i = Math.round(pts.length * k / (nH + 1));
+          if (i < 1 || i >= pts.length) continue;
+          var q = P(pts[i]), qb = P(pts[i - 1]);
+          var dx = q[0] - qb[0], dy = q[1] - qb[1], L = Math.hypot(dx, dy);
+          if (L < 1e-6) continue;
+          (function (q, ux, uy, z) {
+            push(lay(st, z), function (ctx) {
+              var hl = st.head || 11;
+              ctx.save();
+              ctx.fillStyle = st.color || '#e08a3c';
+              ctx.globalAlpha = st.alpha === undefined ? 1 : st.alpha;
+              ctx.beginPath();
+              ctx.moveTo(q[0] + ux * hl * 0.5, q[1] + uy * hl * 0.5);
+              ctx.lineTo(q[0] - ux * hl * 0.5 - uy * hl * 0.36, q[1] - uy * hl * 0.5 + ux * hl * 0.36);
+              ctx.lineTo(q[0] - ux * hl * 0.5 + uy * hl * 0.36, q[1] - uy * hl * 0.5 - ux * hl * 0.36);
+              ctx.closePath(); ctx.fill(); ctx.restore();
+            });
+          })(q, dx / L, dy / L, depth(pts[i]) - 1e-7);
+        }
+      },
+
+      /* Drehsinn-Ring senkrecht zur Tangente t um den Punkt p (Rechte-Hand-Regel) */
+      spin3: function (p, t, r, st) {
+        st = st || {};
+        var tu = V3.unit(t);
+        var helper = Math.abs(tu[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0];
+        var u = V3.unit(V3.cross(helper, tu)), v = V3.cross(tu, u);
+        var pts = S.arcPts(p, u, v, r, 0, 5.2, 30);
+        S.poly3(pts, { color: st.color || '#8fa2b5', width: st.width || 1.4, alpha: st.alpha, layer: st.layer });
+        var n = pts.length;
+        S.arrow3(pts[n - 2], pts[n - 1],
+                 { color: st.color || '#8fa2b5', width: st.width || 1.4, head: 7, alpha: st.alpha, layer: st.layer });
+      },
+
+      /* Achsenkreuz mit Beschriftung */
+      axes: function (L, names, st) {
+        st = st || {};
+        var c = st.color || '#55636f', lc = st.labelColor || '#7b8896';
+        var ax = [[[L, 0, 0], names && names[0] || 'x'],
+                  [[0, L, 0], names && names[1] || 'y'],
+                  [[0, 0, L], names && names[2] || 'z']];
+        ax.forEach(function (e) {
+          S.arrow3([0, 0, 0], e[0], { color: c, width: 1.3, head: 8, layer: st.layer });
+          S.label3(V3.mul(e[0], 1.09), e[1], { color: lc, dx: 3, font: 'italic 13px Georgia, serif', layer: st.layer });
+        });
+      },
+
+      /* Gitter in einer Koordinatenebene: plane 'xz' | 'xy' | 'yz' */
+      grid3: function (plane, half, step, st) {
+        st = st || {};
+        var col = st.color || '#1b2430';
+        for (var i = -half; i <= half + 1e-9; i += step) {
+          var a, b, c2, d;
+          if (plane === 'xz') { a = [i, 0, -half]; b = [i, 0, half]; c2 = [-half, 0, i]; d = [half, 0, i]; }
+          else if (plane === 'xy') { a = [i, -half, 0]; b = [i, half, 0]; c2 = [-half, i, 0]; d = [half, i, 0]; }
+          else { a = [0, i, -half]; b = [0, i, half]; c2 = [0, -half, i]; d = [0, half, i]; }
+          S.poly3([a, b], { color: col, width: 1, layer: 'back' });
+          S.poly3([c2, d], { color: col, width: 1, layer: 'back' });
+        }
+      }
+    };
+
+    var cv = canvas({
+      aspect: o.aspect || 0.62,
+      cap: o.cap,
+      render: function (ctx, w, hgt, t) {
+        ctxRef = ctx;
+        setCam(w, hgt);
+        queue = [];
+        // Ein Fehler beim Zeichnen darf nicht die rAF-Schleife der ganzen
+        // Seite abreissen lassen — dann stünden auch alle anderen
+        // Animationen still. Unter file:// maskiert der Browser den Stack
+        // im window.onerror-Handler, hier ist er vollständig.
+        try {
+          o.draw(S, t);
+        } catch (err) {
+          window.FV_lastError = { where: o.name || 'scene3d', message: err.message, stack: err.stack };
+          if (!scene3d._warned) { scene3d._warned = true; console.error('scene3d:', err); }
+        }
+        queue.sort(function (a, b) { return b.z - a.z; });
+        for (var i = 0; i < queue.length; i++) queue[i].f(ctx);
+        if (!o.noHint) {
+          text(ctx, w - 10, 15, 'ziehen zum Drehen · Rad zoomt · Doppelklick setzt zurück',
+               { color: '#4a5663', font: '11px -apple-system, sans-serif', align: 'right' });
+        }
+      }
+    });
+
+    /* ---------- Maus: Kamera drehen bzw. Griffpunkt ziehen ---------- */
+
+    var el = cv.el;
+    el.classList.add('grabbable');
+    var drag = null;
+
+    function localXY(ev) {
+      var r = el.getBoundingClientRect();
+      return [ev.clientX - r.left, ev.clientY - r.top];
+    }
+
+    function hitHandle(xy) {
+      if (!o.pick) return null;
+      var hs = o.pick() || [], best = null, bd = 15;
+      hs.forEach(function (hd) {
+        var q = P(hd.p), d = Math.hypot(q[0] - xy[0], q[1] - xy[1]);
+        if (d < bd) { bd = d; best = hd; }
+      });
+      return best;
+    }
+
+    el.addEventListener('pointerdown', function (ev) {
+      var xy = localXY(ev);
+      var hd = hitHandle(xy);
+      drag = hd ? { mode: 'pick', xy: xy, h: hd, p0: hd.p.slice() }
+                : { mode: 'rot', xy: xy, azim: cam.azim, elev: cam.elev };
+      el.setPointerCapture(ev.pointerId);
+      el.style.cursor = 'grabbing';
+      ev.preventDefault();
+    });
+
+    el.addEventListener('pointermove', function (ev) {
+      var xy = localXY(ev);
+      if (!drag) {
+        el.style.cursor = hitHandle(xy) ? 'pointer' : 'grab';
+        return;
+      }
+      var dx = xy[0] - drag.xy[0], dy = xy[1] - drag.xy[1];
+      if (drag.mode === 'rot') {
+        cam.azim = drag.azim + dx * 0.009;
+        cam.elev = Math.max(-1.45, Math.min(1.45, drag.elev + dy * 0.009));
+      } else {
+        // in der Kameraebene verschieben — das ist immer möglich und wirkt direkt
+        var np = V3.add(drag.p0, V3.add(V3.mul(right, dx / sc), V3.mul(upv, -dy / sc)));
+        drag.h.set(np);
+      }
+      cv.draw();
+      ev.preventDefault();
+    });
+
+    function endDrag(ev) {
+      if (!drag) return;
+      drag = null;
+      el.style.cursor = 'grab';
+      if (ev && ev.pointerId !== undefined && el.hasPointerCapture(ev.pointerId)) {
+        el.releasePointerCapture(ev.pointerId);
+      }
+    }
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+
+    el.addEventListener('wheel', function (ev) {
+      cam.zoom = Math.max(0.35, Math.min(4, cam.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      cv.draw(); ev.preventDefault();
+    }, { passive: false });
+
+    el.addEventListener('dblclick', function () {
+      cam.azim = cam0.azim; cam.elev = cam0.elev; cam.zoom = 1;
+      cv.draw();
+    });
+
+    cv.cam = cam;
+    cv.S = S;
+    cv.setView = function (az, el2, zm) {
+      cam.azim = az; cam.elev = el2; if (zm) cam.zoom = zm; cv.draw();
+    };
+    if (o.animate) loop(function () { cv.draw(); });
+    return cv;
+  }
+
   /* ---------- Router / Start ---------- */
 
   function buildNav() {
@@ -424,6 +755,7 @@ var FV = (function () {
     register: register, start: start, modules: modules,
     h: h, section: section, panel: panel, note: note, eq: eq, legend: legend,
     slider: slider, toggle: toggle, button: button, ctrlRow: ctrlRow, readout: readout,
-    canvas: canvas, loop: loop, plot: plot, arrow: arrow, text: text, embed: embed
+    canvas: canvas, loop: loop, plot: plot, arrow: arrow, text: text, embed: embed,
+    scene3d: scene3d, V3: V3
   };
 })();

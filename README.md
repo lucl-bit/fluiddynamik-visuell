@@ -23,8 +23,10 @@ reines HTML, CSS und JavaScript ohne jede Abhängigkeit.
 | Joukowski-Transformation | Kap. 9.5, S. 72 ff. | eingebettetes Widget (`labs/`) plus Erklärung von Winkeltreue, kritischen Punkten und Kutta-Bedingung |
 | Starrkörper- vs. Potentialwirbel | Kap. 10.1, S. 79–81 | Vergleichsanimation mit Orientierungszeigern und materiellem Fluidelement, Rankine-Profile, Zirkulation, Gegenbeispiel Scherströmung, Prüfungsfallen |
 | Wirbellinien und die Grenzschicht | Kap. 10.1, S. 82 f., Abb. 10.4 | Wo Wirbellinien in fünf Strömungen liegen (3D, umschaltbar), Blasius-Grenzschicht mit ω-Verteilung und mitschwimmenden Schaufelrädern, ausgelenkte Wirbellinie (Λ-Wirbel), Galilei-Invarianz, Helmholtz |
+| Biot-Savart | Kap. 10.1, S. 83 f., Abb. 10.5 | Das Linienintegral Beitrag für Beitrag in einer drehbaren 3D-Szene (ds, r, das aufgespannte Parallelogramm, ds×r, mitwachsender Summenvektor), fünf Fadenformen mit numerischer Gegenprobe zur Winkelformel, die Grenzübergänge zu Γ/2πr und Γ/4πr, das Volumenintegral, Rechenlabor mit drei Prüfungsgeometrien |
 | Wirbelstreckung und Kippen | Kap. 10.2, S. 84–86 | Wirbelelement frei orientierbar, W mit Zerlegung in Streckung und Kippen, materielle Entwicklung, 2D-Sonderfall, Pirouetteneffekt. Löst FS24 3.3 und HS19 3.6 |
 | Wirbelring an der Wand | Kap. 10.3, S. 83, 87 ff. | Spiegelwirbel-Prinzip, Biot-Savart-Simulation beider Prüfungsfälle mit dem wandfreien Ring als Vergleich. Löst HS19 3.4 und 3.5 |
+| Tragflügel: 2D gegen 3D | Kap. 10.4, S. 89–91, Abb. 10.7–10.9 | Warum die ebene Theorie keinen Widerstand kennt und der endliche Flügel zwingend einen hat: integrierte Stromlinien um den Flügel, Hufeisenmodell mit w(z), Traglinie in Glauert-Form (elliptisch als beweisbares Optimum), Kräftezerlegung am Profilschnitt, c_W,ind über der Flügelstreckung, Vergleichstabelle |
 | Verdichtungsstoss | Kap. 11.3/11.5, S. 101–112 | Aufsteilen einer Kompressionswelle, Machkegel, senkrechter Stoss mit allen Verhältnissen, θ-β-Ma-Stossdiagramm mit abgehobenem Stoss |
 | Kanallabor: Fläche, Reibung, Sperrung | Kap. 11.4 + 11.7 | Ein Kanal, umschaltbar zwischen Laval und Fanno; wo Ma = 1 auftritt (Hals gegen Rohrende), Sperrgrenze, Massenstrom über Gegendruck, kritische Rohrlänge L* |
 | Freistrahl: die Wellen lesen | Kap. 11.5–11.6, S. 109–115 | Was eine Machwelle ist, Schritt-für-Schritt-Konstruktion ihres Wegs durch den Strahl, die zwei Reflexionsregeln, Druckverlauf auf der Achse |
@@ -107,6 +109,14 @@ automatisch gestoppt); `arrow(ctx, x1, y1, x2, y2, farbe, breite, kopf)`;
 liefert `X(v)`, `Y(v)`, `grid()`, `axes()`, `curve(f, stil)`, `poly(punkte, stil)`,
 `vline(x, stil)`, `dot(x, y, farbe, r)`, `label(x, y, txt, farbe)`, `clip(fn)`
 
+**Drehbare 3D-Szene** — `scene3d({aspect, span, azim, elev, animate, cap, draw(S, t), pick()})`.
+Ziehen dreht, Rad zoomt, Doppelklick setzt zurück; `pick()` liefert greifbare Punkte als
+`[{p, set(neuesP)}]`. Im Zeichencallback stehen `S.line3`, `S.poly3`, `S.fill3`, `S.arrow3`,
+`S.arc3`, `S.point3`, `S.label3`, `S.filament3` (Wirbelfaden mit Γ-Pfeilen), `S.spin3`
+(Drehsinn-Ring), `S.axes`, `S.grid3` bereit, dazu `S.P(p)` und die Vektorhelfer `FV.V3`.
+Bewusst orthographisch, damit Winkel und Längen ablesbar bleiben; Tiefensortierung über die
+mittlere Tiefe jedes Objekts. `layer: 'front'` bzw. `'back'` erzwingt die Reihenfolge.
+
 Farbrollen: `--c1` orange für die erste Vergleichsgrösse (Starrkörper, Zustand 1),
 `--c2` cyan für die zweite (Potentialwirbel, Zustand 2), `--c3` violett für Ruhegrössen
 und Entropie.
@@ -118,12 +128,13 @@ node verify.js
 ```
 
 `verify.js` schneidet die Physikblöcke aus den Moduldateien selbst heraus und rechnet sie
-gegen bekannte Werte nach — Syntax aller Dateien, die Formeln der Wirbelstreckung, die
-Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings,
+gegen bekannte Werte nach — Syntax aller Dateien, die Formeln der Wirbelstreckung, das
+Biot-Savart-Linienintegral gegen seine geschlossenen Formeln, die Traglinie und die
+Beiwerte des Tragflügels, die Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings,
 die Blasius-Lösung und die Fanno-Verhältnisse gegen die Zahlenwerte des Skripts, die
 Prandtl-Meyer-Funktion und die Wellenreflexionen im Freistrahl, die Düsenrechnung gegen die
 Isentropentafeln und die Einbindung in `index.html`. Wer ein Modul ändert, sollte das Skript
-danach laufen lassen; erwartete Ausgabe ist `ALLE 249 PRUEFUNGEN BESTANDEN`.
+danach laufen lassen; erwartete Ausgabe ist `ALLE 325 PRUEFUNGEN BESTANDEN`.
 
 Das Skript hat sich bereits bezahlt gemacht: es hat einen invertierten Massenstrom
 (`ṁ/ṁmax > 1` bei nicht gesperrter Düse) und zwei Preset-Knöpfe gefunden, die wegen der
@@ -160,6 +171,28 @@ Slider-Schrittweite ihren Fall verfehlten.
   Der Grenzwert λL*/D → 0.8215 für Ma → ∞ stimmt auf vier Stellen. Die Beziehung für L* steht
   nicht im Skript (dort nur die Zustandsverhältnisse, S. 118, mit Verweis auf Kundu Kap. 15.8).
 - Prandtl-Meyer: ν(2) = 26.380°, ν(3) = 49.757°, ν(∞) = 130.45° — Literaturwerte auf drei Stellen.
+- Biot-Savart: das numerische Linienintegral wird gegen die geschlossenen Formeln gerechnet,
+  nicht umgekehrt. Unendlicher Faden Γ/(2πr), halbunendlicher Γ/(4πr) — das Verhältnis ist bei
+  *jeder* Länge exakt 2, nicht erst im Grenzwert. Ring auf der Achse Γ R²/(2(R²+z²)^(3/2)),
+  im Zentrum Γ/(2R).
+- Die drei Prüfungsgeometrien tragen alle denselben Trick: bei geschickter Wahl des Aufpunkts
+  ist |r| über den ganzen Kreisbogen konstant und wandert aus dem Integral. Gleitschirm
+  |r| = √2·R, Ergebnis (−Γ/(32a), −√2Γ/(16πa), 0); Tragflügel |r| = √(R²+a²). Beide sind
+  numerisch gegengerechnet, haben aber **keine** offizielle Musterlösung und sind auf der
+  Seite mit ⚠ gekennzeichnet.
+- Traglinie: gerechnet wird in der Glauert-Form Γ(θ) = Σ Gₙ sin(nθ), **nicht** mit
+  Hufeisen-Panels. Grund: das Abwindintegral ist ein Cauchy-Hauptwert; diskrete freie Wirbel
+  auf den Knoten lassen ihn an den Flügelspitzen divergieren, und der Fehler dort wächst mit
+  der Panelzahl statt zu verschwinden. Die Reihe liefert w exakt konstant über die ganze
+  Spannweite (−Γ₀/(2b), auf 1e−9 geprüft, bis in die Spitzen).
+- Aus L = ϱu∞πb G₁/4 und D = ϱ(π/8)·Σ n Gₙ² liest man die Optimalität der Ellipse direkt ab:
+  der Auftrieb hängt allein an G₁, jeder weitere Koeffizient kostet nur Widerstand. Eine
+  parabolische Verteilung kostet exakt 12.5 % mehr — analytisch Σ_{n≥3, ungerade} 9/(n(n²−4)²) = 1/8.
+- Einzelhufeisen: w(z) = −Γ/(4π)·b/((b/2)²−z²), in der Mitte −Γ/(πb). An den Spitzen divergiert
+  es — das ist ein Modellfehler, kein physikalischer Effekt, und der Grund für die Traglinie.
+- `core.js`: der rAF-Zeitstempel bezieht sich auf den Frame-*Beginn* und kann vor dem in
+  `ensureRaf()` genommenen `performance.now()` liegen. `t` wurde dadurch im ersten Frame
+  negativ, was jedes `floor(t·n)` auf −1 schickte. Wird jetzt bei 0 geklemmt.
 - Laval-Düse mit A_e/A* = 2.0: Ma_e = 2.1972 (Überschall) bzw. 0.3059 (Unterschall),
   p_E/p₀ = 0.0939 (angepasst), p_B/p₀ = 0.9372 (gerade gesperrt), p_D/p₀ = 0.5134
   (Stoss am Austritt) — alles Tafelwerte für γ = 1.4.

@@ -131,6 +131,7 @@ li{margin:5px 0}
 /* ---------- Canvas + Controls ---------- */
 .fv-canvas{display:block; width:100%; border-radius:8px; background:#0b1016}
 .canvas-wrap{position:relative}
+.fv-canvas.grabbable{cursor:grab; touch-action:none}
 .canvas-cap{font-size:12px; color:var(--fg-mute); margin-top:7px; text-align:center}
 
 .duo{display:grid; grid-template-columns:1fr 1fr; gap:16px}
