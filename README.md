@@ -22,6 +22,7 @@ reines HTML, CSS und JavaScript ohne jede Abhängigkeit.
 | Elementarlösungen überlagern | Kap. 9.3, S. 63–71 | eingebettetes Potentialströmungs-Lab (`labs/`) plus Übungsplan, Formelübersicht, Spiegelregel, d'Alembert |
 | Joukowski-Transformation | Kap. 9.5, S. 72 ff. | eingebettetes Widget (`labs/`) plus Erklärung von Winkeltreue, kritischen Punkten und Kutta-Bedingung |
 | Starrkörper- vs. Potentialwirbel | Kap. 10.1, S. 79–81 | Vergleichsanimation mit Orientierungszeigern und materiellem Fluidelement, Rankine-Profile, Zirkulation, Gegenbeispiel Scherströmung, Prüfungsfallen |
+| Wirbellinien und die Grenzschicht | Kap. 10.1, S. 82 f., Abb. 10.4 | Wo Wirbellinien in fünf Strömungen liegen (3D, umschaltbar), Blasius-Grenzschicht mit ω-Verteilung und mitschwimmenden Schaufelrädern, ausgelenkte Wirbellinie (Λ-Wirbel), Galilei-Invarianz, Helmholtz |
 | Wirbelstreckung und Kippen | Kap. 10.2, S. 84–86 | Wirbelelement frei orientierbar, W mit Zerlegung in Streckung und Kippen, materielle Entwicklung, 2D-Sonderfall, Pirouetteneffekt. Löst FS24 3.3 und HS19 3.6 |
 | Wirbelring an der Wand | Kap. 10.3, S. 83, 87 ff. | Spiegelwirbel-Prinzip, Biot-Savart-Simulation beider Prüfungsfälle mit dem wandfreien Ring als Vergleich. Löst HS19 3.4 und 3.5 |
 | Verdichtungsstoss | Kap. 11.3/11.5, S. 101–112 | Aufsteilen einer Kompressionswelle, Machkegel, senkrechter Stoss mit allen Verhältnissen, θ-β-Ma-Stossdiagramm mit abgehobenem Stoss |
@@ -116,10 +117,10 @@ node verify.js
 
 `verify.js` schneidet die Physikblöcke aus den Moduldateien selbst heraus und rechnet sie
 gegen bekannte Werte nach — Syntax aller Dateien, die Formeln der Wirbelstreckung, die
-Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings
-die Düsenrechnung gegen die Isentropentafeln und die Einbindung in `index.html`. Wer ein
-Modul ändert, sollte das Skript danach laufen lassen; erwartete Ausgabe ist
-`ALLE 105 PRUEFUNGEN BESTANDEN`.
+Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings,
+die Blasius-Lösung gegen die Zahlenwerte des Skripts, die Düsenrechnung gegen die
+Isentropentafeln und die Einbindung in `index.html`. Wer ein Modul ändert, sollte das Skript
+danach laufen lassen; erwartete Ausgabe ist `ALLE 147 PRUEFUNGEN BESTANDEN`.
 
 Das Skript hat sich bereits bezahlt gemacht: es hat einen invertierten Massenstrom
 (`ṁ/ṁmax > 1` bei nicht gesperrter Düse) und zwei Preset-Knöpfe gefunden, die wegen der
@@ -139,6 +140,13 @@ Slider-Schrittweite ihren Fall verfehlten.
   der Musterlösung FS24 (F · R · R · R).
 - Wirbelring, freier Ring: Eigengeschwindigkeit exakt Γ/(4πR) = 1/R bei Γ = 4π. Mit Wand
   bei h = 2.5, R = 0.9 startet sie bei 0.955 statt 1.111 und sinkt weiter, während R wächst.
+- Blasius wird beim Laden numerisch gelöst (RK4), nicht tabelliert. Statt eines Shootings
+  nutzt `blasius()` die Skalierungsinvarianz: einmal mit f″(0) = 1 integrieren liefert
+  F′(∞) = C, daraus folgt f″(0) = C^(−3/2) exakt. Kontrollwerte: f″(0) = 0.332057,
+  η(u/u∞ = 0.99) = 4.910 (das „5“ des Skripts), δ₁ = 1.7208, δ₂ = 0.6641,
+  c_f·√Re_x = 0.664 — alles Literatur- und Skriptwerte auf vier Stellen.
+- Die Grenzschichtfiguren stellen y stark überhöht dar; der Faktor steht im Bild bzw. in
+  der Anzeige. Ohne Überhöhung wäre die Grenzschicht bei Re = 20 000 nur 3 % der Plattenlänge.
 - Ausgezeichnete Linien, instationär bei x = −1.0 (Voreinstellungen): Bahnlinie y = +0.544,
   Streichlinie y = −0.514, Stromlinie y = −0.338. Stationär geschaltet: alle drei exakt 0.
 - Joukowski-Widget: der Kreis läuft durch z = +a (dort die scharfe Hinterkante), z = −a liegt

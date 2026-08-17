@@ -16,7 +16,7 @@ function slice(file, from, to) {
 }
 
 console.log('=== 1) Syntax aller ausgelieferten Dateien ===');
-for (const f of ['js/core.js','js/modules/wirbel.js','js/modules/wirbelstreckung.js',
+for (const f of ['js/core.js','js/modules/wirbel.js','js/modules/wirbellinien.js','js/modules/wirbelstreckung.js',
                  'js/modules/wirbelring.js','js/modules/stoss.js','js/modules/lavalduese.js','js/modules/linien.js','js/modules/potentiallab.js','js/modules/joukowski.js','js/modules/roadmap.js']) {
   new Function(fs.readFileSync(D + f, 'utf8'));   // wirft bei Syntaxfehler
   console.log('  PASS  ' + f); pass++;
@@ -264,6 +264,123 @@ for (const f of ['potentiallab','joukowski'])
 const pl = fs.readFileSync(D+'js/modules/potentiallab.js','utf8');
 chk('potentiallab verweist auf das kopierte Lab',
     pl.includes("labs/potentialstroemung.html"), true);
+
+console.log();
+console.log('=== 9) wirbellinien.js — Blasius-Grenzschicht aus der echten Datei ===');
+const phys5 = slice('js/modules/wirbellinien.js', 'function blasius()', '/* ===== Ende Physik =====');
+const W = new Function(phys5 +
+  '; return {BL, ETA_99, ETA_MAX, uOfEta, omOfEta, etaOfU, etaOfOm, deltaStarEta, thetaEta,' +
+  ' etaOfXY, deltaOfX, uOfXY, omWall, omOfXY, cf, lambdaInit, lambdaStep, lineLength, uGal, omGal, R0, OM0};')();
+
+console.log(' Loesung der Blasius-Gleichung 2f\'\'\' + f f\'\' = 0:');
+chk('f\'\'(0) = alpha              (Literatur 0.332057)', W.BL.alpha, 0.332057, 1e-5);
+chk('f\'(eta -> unendlich) = 1', W.uOfEta(W.ETA_MAX), 1.0, 1e-6);
+chk('Haftbedingung f\'(0) = 0', W.uOfEta(0), 0, 1e-12);
+chk('eta bei u/uinf = 0.99        (Literatur 4.910)', W.ETA_99, 4.910, 5e-3);
+chk('delta1 * sqrt(uinf/nu x)     (Skript 1.721)', W.deltaStarEta(), 1.7208, 2e-3);
+chk('delta2 * sqrt(uinf/nu x)     (Skript 0.664)', W.thetaEta(), 0.6641, 2e-3);
+chk('cf * sqrt(Re_x) = 2 alpha    (Skript 0.664)', 2 * W.BL.alpha, 0.664, 1e-3);
+chk('cf(x) direkt aus dem Modul', W.cf(0.5, 1/20000) * Math.sqrt(0.5*20000), 0.664, 1e-3);
+
+console.log(' Wirbelstaerke omega_z = -du/dy: Maximum an der WAND, nicht innen:');
+chk('om/om_wand bei eta=0 ist 1', W.omOfEta(0), 1.0, 1e-12);
+let monoton = true, prevOm = 2;
+for (let e = 0; e <= 6; e += 0.05) { const v = W.omOfEta(e); if (v > prevOm + 1e-9) monoton = false; prevOm = v; }
+chk('faellt von der Wand aus monoton ab', monoton, true);
+chk('am Grenzschichtrand nur noch ~5.5 %', W.omOfEta(W.ETA_99), 0.0554, 2e-3);
+chk('bei eta=6 praktisch null', W.omOfEta(6) < 0.01, true);
+// numerische Gegenprobe: omega = -du/dy aus dem Profil selbst differenziert
+{
+  const nu = 1/20000, x = 0.4, y = 0.004, eps = 1e-7;
+  const dudy = (W.uOfXY(x, y+eps, nu) - W.uOfXY(x, y-eps, nu)) / (2*eps);
+  // relativ pruefen: |omega| ist hier ~73, die Tabelleninterpolation traegt ~1e-4 rel. bei
+  chk('omOfXY stimmt mit -du/dy des Profils ueberein',
+      W.omOfXY(x, y, nu) / (-dudy), 1.0, 1e-3);
+}
+chk('omega ist negativ (du/dy > 0)', W.omOfXY(0.4, 0.004, 1/20000) < 0, true);
+
+console.log(' Wachstumsgesetze:');
+chk('delta ~ sqrt(x):  delta(4x)/delta(x) = 2', W.deltaOfX(0.8,1e-4)/W.deltaOfX(0.2,1e-4), 2.0, 1e-9);
+chk('delta ~ 1/sqrt(Re): 100x Re -> 10x duenner',
+    W.deltaOfX(1,1e-3)/W.deltaOfX(1,1e-5), 10.0, 1e-9);
+chk('delta = 4.910*sqrt(nu x)', W.deltaOfX(1, 1e-4), 4.910*Math.sqrt(1e-4), 5e-5);
+chk('|omega| an der Wand waechst zur Vorderkante hin',
+    Math.abs(W.omWall(0.1,1e-4)) > Math.abs(W.omWall(0.9,1e-4)), true);
+chk('Aehnlichkeit: u haengt nur von eta ab',
+    W.uOfXY(0.25, 0.5*Math.sqrt(1e-4*0.25), 1e-4),
+    W.uOfXY(0.81, 0.5*Math.sqrt(1e-4*0.81), 1e-4), 1e-12);
+
+console.log(' Ausgelenkte Wirbellinie (Abschnitt 3), materiell konvektiert:');
+{
+  const nu = 1/20000, x0 = 0.18, d0 = W.deltaOfX(x0, nu);
+  // (a) gerade Linie: darf sich nicht veraendern -> genau der 2D-Fall (om.grad)u = 0
+  const g = W.lambdaInit(41, x0, 0.5*d0, 0, 0.9);
+  const Lg0 = W.lineLength(g);
+  for (let i = 0; i < 400; i++) W.lambdaStep(g, 0.002, nu);
+  chk('gerade Linie: Laenge bleibt exakt', W.lineLength(g)/Lg0, 1.0, 1e-12);
+  chk('gerade Linie: alle Punkte auf gleichem x', Math.max(...g.map(p=>p.x)) - Math.min(...g.map(p=>p.x)), 0, 1e-12);
+  chk('gerade Linie: y unveraendert', g[20].y, 0.5*d0, 1e-12);
+  // (b) ausgebeulte Linie: wird gestreckt, die Spitze eilt voraus
+  const b = W.lambdaInit(41, x0, 0.5*d0, 0.5*d0, 0.9);
+  const Lb0 = W.lineLength(b);
+  let mono = true, last = 1;
+  for (let i = 0; i < 400; i++) {
+    W.lambdaStep(b, 0.002, nu);
+    const r = W.lineLength(b)/Lb0;
+    if (r < last - 1e-12) mono = false;
+    last = r;
+  }
+  chk('ausgebeulte Linie: wird laenger  -> |omega| waechst', last > 1.02, true);
+  chk('  und zwar monoton', mono, true);
+  chk('Spitze (Mitte) eilt dem Rand voraus', b[20].x > b[0].x + 1e-6, true);
+  chk('Rand bleibt in der Ausgangshoehe', b[0].y, 0.5*d0, 1e-12);
+  console.log('   (Laenge nach t=0.8: x' + last.toFixed(4) + ', Vorsprung ' + (b[20].x-b[0].x).toFixed(4) + ')');
+}
+
+console.log(' Galilei-Invarianz (Abschnitt 4):');
+{
+  // omega numerisch aus dem Geschwindigkeitsfeld: om_z = dv/dx - du/dy
+  const eps = 1e-5;
+  const omNum = (x, y, Ub) =>
+    (W.uGal(x+eps, y, 1.0, Ub)[1] - W.uGal(x-eps, y, 1.0, Ub)[1]) / (2*eps) -
+    (W.uGal(x, y+eps, 1.0, Ub)[0] - W.uGal(x, y-eps, 1.0, Ub)[0]) / (2*eps);
+
+  const inner = [[0.2,0.1],[-0.15,0.3],[0.05,-0.25]];
+  const outer = [[1.2,0.5],[-0.9,0.8],[1.5,-0.2]];
+  let invariant = true, matches = true, uAlwaysDiffers = true;
+  for (const [x,y] of inner.concat(outer)) {
+    const o0 = omNum(x,y,0.0), o1 = omNum(x,y,1.0), o2 = omNum(x,y,1.6);
+    if (Math.abs(o0-o1) > 1e-6 || Math.abs(o0-o2) > 1e-6) invariant = false;
+    if (Math.abs(o0 - W.omGal(x,y)) > 1e-5) matches = false;
+    if (Math.abs(W.uGal(x,y,1.0,0.0)[0] - W.uGal(x,y,1.0,1.0)[0]) < 1e-9) uAlwaysDiffers = false;
+  }
+  chk('omega aus u differenziert: gleich fuer Ub = 0, 1.0, 1.6', invariant, true);
+  chk('  und deckt sich mit der analytischen Formel omGal', matches, true);
+  chk('u dagegen aendert sich in JEDEM der Punkte', uAlwaysDiffers, true);
+  chk('omGal bekommt Uinf/Ub gar nicht erst als Argument', W.omGal.length, 2);
+  chk('omega im Kern = 2*Omega', W.omGal(0.1,0.1), 2*W.OM0, 1e-12);
+  chk('omega ausserhalb des Kerns = 0', W.omGal(W.R0+0.01,0), 0, 1e-12);
+  // mitbewegt mit Ub = Uinf bleibt nur die Umfangsbewegung: u steht senkrecht auf r
+  for (const [x,y] of [[0.3,0.2],[0.9,-0.4]]) {
+    const u = W.uGal(x,y,1.0,1.0), r = Math.hypot(x,y);
+    chk('Ub=Uinf: u senkrecht auf r bei (' + x + ',' + y + ')', (u[0]*x + u[1]*y)/r, 0, 1e-12);
+  }
+  chk('Ub=0: derselbe Punkt hat eine Radialkomponente',
+      Math.abs(W.uGal(0.3,0.2,1.0,0.0)[0]*0.3 + W.uGal(0.3,0.2,1.0,0.0)[1]*0.2) > 0.1, true);
+  chk('Rankine: u_theta stetig bei r0',
+      Math.hypot(...W.uGal(0, W.R0-1e-7, 0, 0)), Math.hypot(...W.uGal(0, W.R0+1e-7, 0, 0)), 1e-5);
+  chk('Kern: Starrkoerper u_theta ~ r', W.uGal(0.2,0,0,0)[1] / W.uGal(0.4,0,0,0)[1], 0.5, 1e-9);
+  chk('aussen: Potentialwirbel u_theta ~ 1/r',
+      W.uGal(1.2,0,0,0)[1] / W.uGal(0.6,0,0,0)[1], 0.5, 1e-9);
+}
+
+console.log(' Einbindung:');
+chk('script-Tag wirbellinien.js in index.html', html.includes('js/modules/wirbellinien.js'), true);
+chk('steht zwischen wirbel.js und wirbelstreckung.js',
+    html.indexOf('wirbel.js') < html.indexOf('wirbellinien.js') &&
+    html.indexOf('wirbellinien.js') < html.indexOf('wirbelstreckung.js'), true);
+chk('roadmap verlinkt das neue Kapitel',
+    fs.readFileSync(D+'js/modules/roadmap.js','utf8').includes("link: 'wirbellinien'"), true);
 
 console.log();
 console.log(fail === 0 ? `ALLE ${pass} PRUEFUNGEN BESTANDEN` : `${fail} FEHLGESCHLAGEN, ${pass} bestanden`);
