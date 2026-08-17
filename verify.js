@@ -16,7 +16,7 @@ function slice(file, from, to) {
 }
 
 console.log('=== 1) Syntax aller ausgelieferten Dateien ===');
-for (const f of ['js/core.js','js/modules/wirbel.js','js/modules/wirbellinien.js','js/modules/wirbelstreckung.js',
+for (const f of ['js/core.js','js/modules/wirbel.js','js/modules/wirbellinien.js','js/modules/kanal.js','js/modules/freistrahl.js','js/modules/wirbelstreckung.js',
                  'js/modules/wirbelring.js','js/modules/stoss.js','js/modules/lavalduese.js','js/modules/linien.js','js/modules/potentiallab.js','js/modules/joukowski.js','js/modules/roadmap.js']) {
   new Function(fs.readFileSync(D + f, 'utf8'));   // wirft bei Syntaxfehler
   console.log('  PASS  ' + f); pass++;
@@ -381,6 +381,192 @@ chk('steht zwischen wirbel.js und wirbelstreckung.js',
     html.indexOf('wirbellinien.js') < html.indexOf('wirbelstreckung.js'), true);
 chk('roadmap verlinkt das neue Kapitel',
     fs.readFileSync(D+'js/modules/roadmap.js','utf8').includes("link: 'wirbellinien'"), true);
+
+console.log();
+console.log('=== 10) kanal.js — Fanno und Laval aus der echten Datei ===');
+const phys6 = slice('js/modules/kanal.js', 'var GAM = 1.4;', '/* ===== Ende Physik =====');
+const K = new Function(phys6 +
+  '; return {pIso, TIso, rIso, areaRatio, MaFromArea, shockMa2, shockP0, fT, fp, fr, fp0, fLD,' +
+  ' MaFromFLD, flux, XT, AIN, AofX, solveLaval, MaFromP, lavalAt, fannoOut, solveFanno, fannoAt};')();
+
+console.log(' Fanno-Tafel (gamma = 1.4), Skript S. 118:');
+for (const [M, T, p, p0, L] of [
+  [0.2, 1.1905, 5.4554, 2.9635, 14.5333],
+  [0.5, 1.1429, 2.1381, 1.3399,  1.0691],
+  [2.0, 0.6667, 0.4082, 1.6875,  0.3050],
+  [3.0, 0.4286, 0.2182, 4.2346,  0.5222]]) {
+  chk(`Ma=${M}  T/T*`,   K.fT(M),  T,  5e-4);
+  chk(`Ma=${M}  p/p*`,   K.fp(M),  p,  5e-4);
+  chk(`Ma=${M}  p0/p0*`, K.fp0(M), p0, 5e-4);
+  chk(`Ma=${M}  lambda L*/D`, K.fLD(M), L, 5e-4);
+}
+chk('rho/rho* = (p/p*)/(T/T*)  (ideales Gas)', K.fr(0.5), K.fp(0.5)/K.fT(0.5), 1e-9);
+chk('alle Verhaeltnisse = 1 bei Ma = 1', K.fT(1)+K.fp(1)+K.fr(1)+K.fp0(1), 4, 1e-9);
+chk('lambda L*/D = 0 bei Ma = 1', K.fLD(1), 0, 1e-9);
+chk('Grenzwert Ma -> unendlich  (Literatur 0.8215)', K.fLD(1e6), 0.8215, 1e-4);
+chk('MaFromFLD Unterschall invers', K.MaFromFLD(K.fLD(0.35), false), 0.35, 1e-6);
+chk('MaFromFLD Ueberschall invers', K.MaFromFLD(K.fLD(2.4), true), 2.4, 1e-5);
+chk('beide Aeste laufen auf Ma=1 zu: L* faellt zur 1 hin',
+    K.fLD(0.3) > K.fLD(0.7) && K.fLD(3.0) > K.fLD(1.5), true);
+
+console.log(' Fanno-Rohr am Kessel, lambda L/D = 1.0691 (das ist genau L* fuer Ma1 = 0.5):');
+{
+  const fld = K.fLD(0.5);
+  const ges = K.solveFanno(fld, 0.05);
+  chk('gesperrt: Ma1 trifft exakt 0.5', ges.Ma1, 0.5, 1e-5);
+  chk('gesperrt: Ma2 = 1 am ROHRENDE', ges.Ma2, 1.0, 1e-6);
+  chk('gesperrt: Flag gesetzt', ges.choked, true);
+  const frei = K.solveFanno(fld, 0.8);
+  chk('nicht gesperrt bei pa = 0.8', frei.choked, false);
+  chk('  Austrittsdruck trifft den Gegendruck', frei.pOut, 0.8, 1e-4);
+  chk('  Ma2 > Ma1 (Reibung BESCHLEUNIGT im Unterschall)', frei.Ma2 > frei.Ma1, true);
+  chk('mdot konstant unterhalb der Sperrgrenze',
+      K.solveFanno(fld, 0.30).mdot, K.solveFanno(fld, 0.02).mdot, 1e-12);
+  chk('mdot steigt mit fallendem pa (noch nicht gesperrt)',
+      K.solveFanno(fld, 0.6).mdot > K.solveFanno(fld, 0.9).mdot, true);
+  chk('laengeres Rohr -> kleineres Ma1 -> weniger Durchsatz',
+      K.solveFanno(8, 0.02).mdot < K.solveFanno(0.5, 0.02).mdot, true);
+  // Verlauf im Rohr: das Entscheidende ist, dass p0 FAELLT
+  let p0Faellt = true, maSteigt = true, T0const = true;
+  const s = K.solveFanno(fld, 0.05);
+  let prevP0 = 2, prevMa = -1;
+  const T0 = x => { const z = K.fannoAt(x, s); return z.T * (1 + 0.2*z.Ma*z.Ma); };
+  for (let x = 0; x <= 1.0001; x += 0.02) {
+    const z = K.fannoAt(x, s);
+    if (z.p0 > prevP0 + 1e-9) p0Faellt = false;
+    if (z.Ma < prevMa - 1e-9) maSteigt = false;
+    if (Math.abs(T0(x) - T0(0)) > 1e-6) T0const = false;
+    prevP0 = z.p0; prevMa = z.Ma;
+  }
+  chk('Totaldruck p0 faellt ueber die ganze Rohrlaenge', p0Faellt, true);
+  chk('  und zwar echt: p0(Ende)/p0(Ein) < 1', K.fannoAt(1, s).p0 < 0.999, true);
+  chk('Mach-Zahl steigt monoton bis 1', maSteigt, true);
+  chk('Totaltemperatur T0 bleibt konstant (adiabat!)', T0const, true);
+  chk('p faellt in Stroemungsrichtung', K.fannoAt(1, s).p < K.fannoAt(0, s).p, true);
+  chk('T faellt in Stroemungsrichtung (Unterschall)', K.fannoAt(1, s).T < K.fannoAt(0, s).T, true);
+}
+
+console.log(' Laval-Kanal aus derselben Datei:');
+{
+  chk('A/A*(Ma=1) = 1', K.areaRatio(1), 1, 1e-9);
+  chk('Ma(A/A*=2) Ueberschall  (Tafel 2.1972)', K.MaFromArea(2, true), 2.1972, 1e-3);
+  chk('Ma(A/A*=2) Unterschall  (Tafel 0.3059)', K.MaFromArea(2, false), 0.3059, 1e-3);
+  const s = K.solveLaval(0.10, 2.0);
+  chk('tiefer Gegendruck -> gesperrt', s.choked, true);
+  chk('Ma = 1 exakt im HALS', K.lavalAt(K.XT, s).Ma, 1.0, 2e-3);
+  chk('p0 konstant ohne Stoss (isentrop)', K.lavalAt(0.9, s).p0, 1.0, 1e-12);
+  chk('mdot maximal und konstant ab Sperrung',
+      K.solveLaval(0.10, 2).mdot, K.solveLaval(0.30, 2).mdot, 1e-12);
+  chk('nicht gesperrt bei hohem Gegendruck', K.solveLaval(0.99, 2).choked, false);
+  chk('  dann mdot < 1', K.solveLaval(0.99, 2).mdot < 1, true);
+  const sh = K.solveLaval(0.70, 2.0);
+  chk('mittlerer Gegendruck -> Stoss im divergenten Teil', sh.mode, 'shock');
+  chk('  Stoss liegt hinter dem Hals', sh.xs > K.XT, true);
+  chk('  p0 springt am Stoss nach unten',
+      K.lavalAt(sh.xs + 0.02, sh).p0 < K.lavalAt(sh.xs - 0.02, sh).p0, true);
+  chk('  Ma springt von Ueber- auf Unterschall',
+      K.lavalAt(sh.xs - 0.02, sh).Ma > 1 && K.lavalAt(sh.xs + 0.02, sh).Ma < 1, true);
+  chk('  Austrittsdruck trifft den Gegendruck', K.lavalAt(0.9999, sh).p, 0.70, 5e-3);
+  chk('groessere Austrittsflaeche -> hoeheres Ma am Austritt',
+      K.MaFromArea(3.5, true) > K.MaFromArea(2.0, true), true);
+  chk('Stoss wandert bei steigendem pa Richtung Hals',
+      K.solveLaval(0.80, 2).xs < K.solveLaval(0.60, 2).xs, true);
+}
+
+console.log(' Der Kernvergleich: wo steht Ma = 1?');
+{
+  const sL = K.solveLaval(0.10, 2.0), sF = K.solveFanno(K.fLD(0.5), 0.05);
+  chk('Laval: im Hals, NICHT am Austritt',
+      Math.abs(K.lavalAt(K.XT, sL).Ma - 1) < 2e-3 && K.lavalAt(1, sL).Ma > 2, true);
+  chk('Fanno: am Austritt, NICHT vorher',
+      Math.abs(K.fannoAt(1, sF).Ma - 1) < 1e-3 && K.fannoAt(0.5, sF).Ma < 1, true);
+}
+chk('script-Tag kanal.js in index.html', html.includes('js/modules/kanal.js'), true);
+
+console.log();
+console.log('=== 11) freistrahl.js — Prandtl-Meyer und Wellenreflexion ===');
+const phys7 = slice('js/modules/freistrahl.js', 'var GAM = 1.4, DEG', '/* ===== Ende Physik =====');
+const J = new Function(phys7 +
+  '; return {pIso, machWinkel, nu, MaFromNu, MaFromP, areaRatio, MaFromArea,' +
+  ' strahl, wellenzug, achsDruck};')();
+const DEG = 180/Math.PI;
+
+console.log(' Prandtl-Meyer-Funktion (Skript S. 113):');
+chk('nu(1) = 0', J.nu(1), 0, 1e-12);
+chk('nu(1.5)  (Literatur 11.905 Grad)', J.nu(1.5)*DEG, 11.905, 2e-3);
+chk('nu(2.0)  (Literatur 26.380 Grad)', J.nu(2.0)*DEG, 26.380, 2e-3);
+chk('nu(3.0)  (Literatur 49.757 Grad)', J.nu(3.0)*DEG, 49.757, 2e-3);
+chk('nu(unendlich)  (Literatur 130.45 Grad)', J.nu(1e6)*DEG, 130.45, 0.01);
+chk('MaFromNu invers', J.MaFromNu(J.nu(2.4)), 2.4, 1e-5);
+chk('Machwinkel mu(2) = 30 Grad', J.machWinkel(2)*DEG, 30, 1e-9);
+chk('Machwinkel mu(1) = 90 Grad', J.machWinkel(1)*DEG, 90, 1e-9);
+chk('schneller -> flacher', J.machWinkel(3) < J.machWinkel(2), true);
+
+console.log(' Strahlzustand, Austritt Ma_e = 2.1972 (A_e/A* = 2):');
+const MaE = J.MaFromArea(2.0);
+chk('Ma_e aus dem Flaechenverhaeltnis', MaE, 2.1972, 1e-3);
+{
+  const u = J.strahl(MaE, 0.45);      // UNTERexpandiert: p_a < p_e
+  chk('unterexpandiert erkannt', u.unter, true);
+  chk('  Umlenkung positiv -> Expansionsfaecher', u.theta > 0, true);
+  chk('  Ma steigt an der Strahlgrenze', u.MaA > u.MaE, true);
+  chk('  Ma auf der Achse noch hoeher (theta wirkt zweimal)', u.MaC > u.MaA, true);
+  chk('  Randbedingung p = p_a an der Grenze exakt erfuellt', J.pIso(u.MaA), u.pA, 1e-9);
+  chk('  Druck auf der Achse schiesst UNTER p_a durch', u.pC < u.pA, true);
+
+  const o = J.strahl(MaE, 1.90);      // UEBERexpandiert: p_a > p_e
+  chk('ueberexpandiert erkannt', o.ueber, true);
+  chk('  Umlenkung negativ -> Kompression / Stoss', o.theta < 0, true);
+  chk('  Ma faellt an der Strahlgrenze', o.MaA < o.MaE, true);
+  chk('  Ma auf der Achse noch tiefer', o.MaC < o.MaA, true);
+  chk('  Druck auf der Achse schiesst UEBER p_a hinaus', o.pC > o.pA, true);
+
+  const a = J.strahl(MaE, 1.0);       // angepasst
+  chk('angepasst: keine Umlenkung', a.theta, 0, 1e-9);
+  chk('  Ma bleibt ueberall gleich', a.MaC, a.MaE, 1e-6);
+}
+
+console.log(' Die Reflexionsregeln — der Kern des Kapitels:');
+{
+  const u = J.strahl(MaE, 0.45);
+  const wz = J.wellenzug(u, 1, 8);
+  chk('erstes Segment laeuft zur Achse (y2 = 0)', wz.seg[0].y2, 0, 1e-12);
+  chk('erste Welle ist eine Expansion (unterexpandiert)', wz.seg[0].art, 'exp');
+  // Erwartung: Achse gleichartig, freie Grenze kippt
+  //   Seg0 exp (->Achse) | Seg1 exp (->Rand) | Seg2 komp (->Achse) | Seg3 komp (->Rand) | Seg4 exp ...
+  chk('nach Reflexion an der ACHSE gleichartig', wz.seg[1].art, 'exp');
+  chk('nach Reflexion an der freien GRENZE gekippt', wz.seg[2].art, 'komp');
+  chk('wieder Achse -> gleichartig', wz.seg[3].art, 'komp');
+  chk('wieder Grenze -> gekippt', wz.seg[4].art, 'exp');
+  chk('Muster hat die Periode 4 (eine Raute)', wz.seg[0].art === wz.seg[4].art, true);
+  chk('Segmente wechseln zwischen Achse und Rand',
+      wz.seg[0].y2 === 0 && wz.seg[1].y2 > 0 && wz.seg[2].y2 === 0, true);
+  let steigend = true;
+  for (let i = 1; i < wz.seg.length; i++) if (wz.seg[i].x1 < wz.seg[i-1].x1) steigend = false;
+  chk('Wellenzug laeuft monoton stromab', steigend, true);
+
+  const o = J.wellenzug(J.strahl(MaE, 1.90), 1, 8);
+  chk('ueberexpandiert: erste Welle ist eine Kompression', o.seg[0].art, 'komp');
+  chk('  und kippt an der Grenze zur Expansion', o.seg[2].art, 'exp');
+
+  // Strahlgrenze: unterexpandiert zuerst nach AUSSEN, ueberexpandiert nach INNEN
+  chk('unterexpandiert: Strahl wird zuerst BREITER', wz.rand[1].y > wz.rand[0].y, true);
+  chk('ueberexpandiert: Strahl wird zuerst SCHMALER', o.rand[1].y < o.rand[0].y, true);
+  chk('  das ist die ganze Erkennungsregel',
+      (wz.rand[1].y > 1) && (o.rand[1].y < 1), true);
+}
+
+console.log(' Druckverlauf auf der Achse:');
+{
+  const u = J.strahl(MaE, 0.45);
+  const st = J.achsDruck(u, J.wellenzug(u, 1, 10).seg);
+  chk('mehrere Drucksprünge auf der Achse', st.length >= 2, true);
+  chk('erster Sprung: von p_e auf p_Achse', st[0].von, u.pE, 1e-12);
+  chk('  und der geht nach UNTEN (Expansion)', st[0].nach < st[0].von, true);
+  chk('zweiter Sprung geht wieder nach OBEN', st[1].nach > st[1].von, true);
+  chk('Druck pendelt zwischen zwei Werten', st[2].nach, st[0].nach, 1e-12);
+}
+chk('script-Tag freistrahl.js in index.html', html.includes('js/modules/freistrahl.js'), true);
 
 console.log();
 console.log(fail === 0 ? `ALLE ${pass} PRUEFUNGEN BESTANDEN` : `${fail} FEHLGESCHLAGEN, ${pass} bestanden`);

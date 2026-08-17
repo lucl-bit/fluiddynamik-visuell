@@ -26,6 +26,8 @@ reines HTML, CSS und JavaScript ohne jede Abhängigkeit.
 | Wirbelstreckung und Kippen | Kap. 10.2, S. 84–86 | Wirbelelement frei orientierbar, W mit Zerlegung in Streckung und Kippen, materielle Entwicklung, 2D-Sonderfall, Pirouetteneffekt. Löst FS24 3.3 und HS19 3.6 |
 | Wirbelring an der Wand | Kap. 10.3, S. 83, 87 ff. | Spiegelwirbel-Prinzip, Biot-Savart-Simulation beider Prüfungsfälle mit dem wandfreien Ring als Vergleich. Löst HS19 3.4 und 3.5 |
 | Verdichtungsstoss | Kap. 11.3/11.5, S. 101–112 | Aufsteilen einer Kompressionswelle, Machkegel, senkrechter Stoss mit allen Verhältnissen, θ-β-Ma-Stossdiagramm mit abgehobenem Stoss |
+| Kanallabor: Fläche, Reibung, Sperrung | Kap. 11.4 + 11.7 | Ein Kanal, umschaltbar zwischen Laval und Fanno; wo Ma = 1 auftritt (Hals gegen Rohrende), Sperrgrenze, Massenstrom über Gegendruck, kritische Rohrlänge L* |
+| Freistrahl: die Wellen lesen | Kap. 11.5–11.6, S. 109–115 | Was eine Machwelle ist, Schritt-für-Schritt-Konstruktion ihres Wegs durch den Strahl, die zwei Reflexionsregeln, Druckverlauf auf der Achse |
 | Laval-Düse | Kap. 11.4, S. 105–108 | Erkennungsregel über-/unterexpandiert am Strahlbild, Freistrahl mit Rautenmuster, Düse mit Gegendruck-Regler über alle Fälle A–F. Löst FS24 A17 und FS25 A8.3 |
 | Roadmap | Kap. 3–11 | Liste der Themen, die als nächstes visualisiert werden, nach Priorität |
 
@@ -118,9 +120,10 @@ node verify.js
 `verify.js` schneidet die Physikblöcke aus den Moduldateien selbst heraus und rechnet sie
 gegen bekannte Werte nach — Syntax aller Dateien, die Formeln der Wirbelstreckung, die
 Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings,
-die Blasius-Lösung gegen die Zahlenwerte des Skripts, die Düsenrechnung gegen die
+die Blasius-Lösung und die Fanno-Verhältnisse gegen die Zahlenwerte des Skripts, die
+Prandtl-Meyer-Funktion und die Wellenreflexionen im Freistrahl, die Düsenrechnung gegen die
 Isentropentafeln und die Einbindung in `index.html`. Wer ein Modul ändert, sollte das Skript
-danach laufen lassen; erwartete Ausgabe ist `ALLE 147 PRUEFUNGEN BESTANDEN`.
+danach laufen lassen; erwartete Ausgabe ist `ALLE 249 PRUEFUNGEN BESTANDEN`.
 
 Das Skript hat sich bereits bezahlt gemacht: es hat einen invertierten Massenstrom
 (`ṁ/ṁmax > 1` bei nicht gesperrter Düse) und zwei Preset-Knöpfe gefunden, die wegen der
@@ -152,6 +155,11 @@ Slider-Schrittweite ihren Fall verfehlten.
 - Joukowski-Widget: der Kreis läuft durch z = +a (dort die scharfe Hinterkante), z = −a liegt
   im Innern. Die Kopie in `labs/` wurde dafür in einer Zeile korrigiert — im Original lief der
   Kreis durch −a, während die Statusanzeige +a prüfte und deshalb „Ellipse" meldete.
+- Fanno (γ = 1.4), gegen die Tafel geprüft: bei Ma = 0.5 ist T/T* = 1.1429, p/p* = 2.1381,
+  p₀/p₀* = 1.3399 und λL*/D = 1.0691; bei Ma = 2 entsprechend 0.6667 / 0.4082 / 1.6875 / 0.3050.
+  Der Grenzwert λL*/D → 0.8215 für Ma → ∞ stimmt auf vier Stellen. Die Beziehung für L* steht
+  nicht im Skript (dort nur die Zustandsverhältnisse, S. 118, mit Verweis auf Kundu Kap. 15.8).
+- Prandtl-Meyer: ν(2) = 26.380°, ν(3) = 49.757°, ν(∞) = 130.45° — Literaturwerte auf drei Stellen.
 - Laval-Düse mit A_e/A* = 2.0: Ma_e = 2.1972 (Überschall) bzw. 0.3059 (Unterschall),
   p_E/p₀ = 0.0939 (angepasst), p_B/p₀ = 0.9372 (gerade gesperrt), p_D/p₀ = 0.5134
   (Stoss am Austritt) — alles Tafelwerte für γ = 1.4.
