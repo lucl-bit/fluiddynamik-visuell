@@ -737,5 +737,141 @@ console.log(' Beiwerte, Skript S. 91:');
 chk('script-Tag tragfluegel.js in index.html', html.includes('js/modules/tragfluegel.js'), true);
 
 console.log();
+console.log('=== 13) wirbel.js — Rankine-Wirbel und Hillscher Kugelwirbel ===');
+const physRK = slice('js/modules/wirbel.js', 'function rkU', '/* ===== Ende Physik =====');
+const RK = new Function(physRK +
+  '; return {rkU, rkOm, rkGam, rkP, rkH, hillPsi, hillVel, hillOm, hillPsiLab, hillVelLab,' +
+  ' hillUxz, hillPsiXZ, hillGam, hillCore};')();
+
+const OM = 1.0, R0 = 0.45;
+console.log(' Rankine: Anschluss bei r0 und Verlauf:');
+chk('uθ stetig bei r0 (innen)', RK.rkU(R0, R0, OM), OM * R0, 1e-12);
+chk('uθ stetig bei r0 (aussen)', RK.rkU(R0 + 1e-9, R0, OM), OM * R0, 1e-8);
+chk('uθ maximal genau bei r0', RK.rkU(R0, R0, OM) > RK.rkU(R0 * 0.9, R0, OM) &&
+                               RK.rkU(R0, R0, OM) > RK.rkU(R0 * 1.1, R0, OM), true);
+chk('uθ(0) = 0  (keine Singularitaet)', RK.rkU(0, R0, OM), 0, 1e-15);
+chk('ω im Kern = 2Ω', RK.rkOm(R0 * 0.5, R0, OM), 2, 1e-15);
+chk('ω aussen = 0', RK.rkOm(R0 * 1.5, R0, OM), 0, 1e-15);
+chk('Γ innen ∝ r²', RK.rkGam(0.2, R0, OM) / RK.rkGam(0.1, R0, OM), 4, 1e-12);
+chk('Γ aussen konstant (r=1 gegen r=3)',
+    RK.rkGam(3.0, R0, OM) - RK.rkGam(1.0, R0, OM), 0, 1e-12);
+chk('Γ aussen = 2π Ω r0²', RK.rkGam(2.0, R0, OM), 2 * Math.PI * OM * R0 * R0, 1e-12);
+
+console.log(' Rankine: Druck aus dp/dr = ρ uθ²/r (ρ = 1):');
+for (const rr of [0.2, 0.44, 0.6, 1.3]) {
+  const e = 1e-6;
+  const dpdr = (RK.rkP(rr + e, R0, OM) - RK.rkP(rr - e, R0, OM)) / (2 * e);
+  chk(`dp/dr = uθ²/r bei r=${rr}`, dpdr, Math.pow(RK.rkU(rr, R0, OM), 2) / rr, 1e-6);
+}
+chk('p stetig bei r0', RK.rkP(R0 - 1e-9, R0, OM) - RK.rkP(R0 + 1e-9, R0, OM), 0, 1e-8);
+chk('p(∞) → 0', RK.rkP(1e5, R0, OM), 0, 1e-9);
+chk('Δp auf der Achse = 2 · Δp(r0)', RK.rkP(0, R0, OM) / RK.rkP(R0, R0, OM), 2, 1e-12);
+chk('Δp(0) = −ρ Ω² r0²', RK.rkP(0, R0, OM), -OM * OM * R0 * R0, 1e-14);
+
+console.log(' Rankine: Bernoulli-Konstante H = p + ½ρu²:');
+chk('H aussen konstant (r=0.5 gegen r=4)', RK.rkH(0.5, R0, OM) - RK.rkH(4.0, R0, OM), 0, 1e-12);
+chk('H aussen = p∞ = 0', RK.rkH(2.0, R0, OM), 0, 1e-14);
+chk('H im Kern nicht konstant', Math.abs(RK.rkH(0, R0, OM) - RK.rkH(R0 * 0.8, R0, OM)) > 0.1, true);
+chk('H(0) − H(r0) = −Ω² r0²', RK.rkH(0, R0, OM) - RK.rkH(R0, R0, OM), -OM * OM * R0 * R0, 1e-14);
+
+const UH = 1.0, AH = 1.0;
+console.log(' Hill: Anschluss an der Kugelschale r = a:');
+for (const th of [0.3, Math.PI / 2, 2.4]) {
+  chk(`ψ = 0 auf r = a (θ=${th.toFixed(2)})`, RK.hillPsi(AH, th, UH, AH), 0, 1e-14);
+  chk(`ψ stetig bei a (θ=${th.toFixed(2)})`,
+      RK.hillPsi(AH - 1e-7, th, UH, AH) - RK.hillPsi(AH + 1e-7, th, UH, AH), 0, 1e-6);
+  chk(`u_r = 0 auf r = a (θ=${th.toFixed(2)})`, RK.hillVel(AH, th, UH, AH)[0], 0, 1e-14);
+  chk(`u_θ stetig bei a (θ=${th.toFixed(2)})`,
+      RK.hillVel(AH - 1e-7, th, UH, AH)[1] - RK.hillVel(AH + 1e-7, th, UH, AH)[1], 0, 1e-6);
+}
+chk('u_θ(a, 90°) = −1.5 U', RK.hillVel(AH, Math.PI / 2, UH, AH)[1], -1.5 * UH, 1e-14);
+chk('u_z im Kugelzentrum = −1.5 U (mitbewegt)', RK.hillUxz(1e-7, 1e-7, UH, AH, false)[1], -1.5 * UH, 1e-6);
+chk('u_z im Kugelzentrum = −2.5 U (Labor)', RK.hillUxz(1e-7, 1e-7, UH, AH, true)[1], -2.5 * UH, 1e-6);
+
+console.log(' Hill: u folgt aus ψ (numerische Ableitung der Stromfunktion):');
+for (const [r, th] of [[0.55, 1.0], [0.9, 2.0], [1.6, 0.8], [2.5, 2.6]]) {
+  const e = 1e-6;
+  const ur = (RK.hillPsi(r, th + e, UH, AH) - RK.hillPsi(r, th - e, UH, AH)) / (2 * e)
+             / (r * r * Math.sin(th));
+  const ut = -(RK.hillPsi(r + e, th, UH, AH) - RK.hillPsi(r - e, th, UH, AH)) / (2 * e)
+             / (r * Math.sin(th));
+  const v = RK.hillVel(r, th, UH, AH);
+  chk(`u_r aus ψ  (r=${r}, θ=${th})`, ur, v[0], 1e-6);
+  chk(`u_θ aus ψ  (r=${r}, θ=${th})`, ut, v[1], 1e-6);
+}
+
+console.log(' Hill: Wirbelstaerke und Divergenz in der Meridianebene:');
+function curlPhi(rho, z, lab) {          // ω_φ = ∂u_ρ/∂z − ∂u_z/∂ρ
+  const e = 1e-6;
+  const durdz = (RK.hillUxz(rho, z + e, UH, AH, lab)[0] - RK.hillUxz(rho, z - e, UH, AH, lab)[0]) / (2 * e);
+  const duzdr = (RK.hillUxz(rho + e, z, UH, AH, lab)[1] - RK.hillUxz(rho - e, z, UH, AH, lab)[1]) / (2 * e);
+  return durdz - duzdr;
+}
+function divCyl(rho, z, lab) {           // (1/ρ)∂(ρu_ρ)/∂ρ + ∂u_z/∂z
+  const e = 1e-6;
+  const a1 = (rho + e) * RK.hillUxz(rho + e, z, UH, AH, lab)[0];
+  const a2 = (rho - e) * RK.hillUxz(rho - e, z, UH, AH, lab)[0];
+  const duzdz = (RK.hillUxz(rho, z + e, UH, AH, lab)[1] - RK.hillUxz(rho, z - e, UH, AH, lab)[1]) / (2 * e);
+  return (a1 - a2) / (2 * e) / rho + duzdz;
+}
+for (const [rho, z] of [[0.3, 0.2], [0.6, -0.4], [0.85, 0.1]]) {
+  const r = Math.hypot(rho, z), th = Math.atan2(rho, z);
+  chk(`ω_φ = −15U/(2a²)·ρ  bei (${rho}, ${z})`, curlPhi(rho, z), RK.hillOm(r, th, UH, AH), 1e-6);
+  chk(`  ω/ρ konstant`, curlPhi(rho, z) / rho, -7.5 * UH / (AH * AH), 1e-6);
+  chk(`  div u = 0`, divCyl(rho, z), 0, 1e-5);
+}
+chk('ω aussen = 0 (r = 1.6)', curlPhi(1.2, 1.06), 0, 1e-6);
+chk('ω ist galilei-invariant (Labor = mitbewegt)',
+    curlPhi(0.6, -0.4, true), curlPhi(0.6, -0.4, false), 1e-6);
+chk('div u = 0 auch aussen', divCyl(1.4, 0.9, false), 0, 1e-5);
+
+console.log(' Hill: Zirkulation Γ = ∫∫ ω dA über den Meridian-Halbkreis:');
+{
+  let G = 0, n = 900, d = AH / n;
+  for (let i = 0; i < n; i++) for (let j = 0; j < 2 * n; j++) {
+    const rho = (i + 0.5) * d, z = -AH + (j + 0.5) * d;
+    if (rho * rho + z * z > AH * AH) continue;
+    G += -RK.hillOm(Math.hypot(rho, z), Math.atan2(rho, z), UH, AH) * d * d;
+  }
+  chk('Γ numerisch = 5 U a', G, RK.hillGam(UH, AH), 2e-3);
+  chk('hillGam liefert 5', RK.hillGam(UH, AH), 5.0, 1e-14);
+}
+
+console.log(' Hill: Wirbelkern und geschlossene Bahnen:');
+{
+  const rc = RK.hillCore(AH);
+  chk('Kernring bei a/√2', rc, AH / Math.SQRT2, 1e-15);
+  const v = RK.hillUxz(rc, 0, UH, AH, false);
+  chk('u = 0 im Wirbelkern (u_ρ)', v[0], 0, 1e-14);
+  chk('u = 0 im Wirbelkern (u_z)', v[1], 0, 1e-14);
+  // Bahn im mitbewegten System bleibt in der Kugel und schliesst sich
+  let p = [0.95, 0], rMax = 0, dt = 0.002, back = 1e9;
+  const f = q => RK.hillUxz(q[0], q[1], UH, AH, false);
+  for (let i = 0; i < 6000; i++) {
+    const k1 = f(p);
+    const k2 = f([p[0] + k1[0] * dt / 2, p[1] + k1[1] * dt / 2]);
+    const k3 = f([p[0] + k2[0] * dt / 2, p[1] + k2[1] * dt / 2]);
+    const k4 = f([p[0] + k3[0] * dt, p[1] + k3[1] * dt]);
+    p = [p[0] + dt / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+         p[1] + dt / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])];
+    rMax = Math.max(rMax, Math.hypot(p[0], p[1]));
+    if (i > 300) back = Math.min(back, Math.hypot(p[0] - 0.95, p[1]));
+  }
+  chk('Bahn bleibt in der Kugel (r_max ≤ a)', rMax <= AH + 1e-6, true);
+  chk('Bahn schliesst sich (Rueckkehr zum Start)', back, 0, 5e-3);
+}
+
+console.log(' Hill: Laborsystem:');
+chk('ψ_lab → 0 im Unendlichen', RK.hillPsiLab(400, Math.PI / 2, UH, AH), 0, 1e-2);
+chk('u_lab → 0 im Unendlichen', RK.hillVelLab(1e4, 1.2, UH, AH)[1], 0, 1e-7);
+chk('ψ_lab stetig bei r = a', RK.hillPsiLab(AH - 1e-7, 1.1, UH, AH) - RK.hillPsiLab(AH + 1e-7, 1.1, UH, AH), 0, 1e-6);
+chk('u_lab = u − U e_z (u_r)', RK.hillVelLab(1.5, 0.7, UH, AH)[0],
+    RK.hillVel(1.5, 0.7, UH, AH)[0] - UH * Math.cos(0.7), 1e-14);
+chk('u_r,lab auf r = a = −U cosθ (Geschwindigkeit der Wand selbst)',
+    RK.hillVelLab(AH, 0.7, UH, AH)[0], -UH * Math.cos(0.7), 1e-14);
+
+chk('script-Tag wirbel.js in index.html', html.includes('js/modules/wirbel.js'), true);
+
+console.log();
 console.log(fail === 0 ? `ALLE ${pass} PRUEFUNGEN BESTANDEN` : `${fail} FEHLGESCHLAGEN, ${pass} bestanden`);
 process.exit(fail === 0 ? 0 : 1);

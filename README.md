@@ -21,7 +21,7 @@ reines HTML, CSS und JavaScript ohne jede Abhängigkeit.
 | Stromlinie, Bahnlinie, Streichlinie | Kap. 4.5, S. 22–23 | Alle vier ausgezeichneten Linien gleichzeitig in einem instationären Feld, umschaltbar auf stationär; Definitionen und Eigenschaftstabelle |
 | Elementarlösungen überlagern | Kap. 9.3, S. 63–71 | eingebettetes Potentialströmungs-Lab (`labs/`) plus Übungsplan, Formelübersicht, Spiegelregel, d'Alembert |
 | Joukowski-Transformation | Kap. 9.5, S. 72 ff. | eingebettetes Widget (`labs/`) plus Erklärung von Winkeltreue, kritischen Punkten und Kutta-Bedingung |
-| Starrkörper- vs. Potentialwirbel | Kap. 10.1, S. 79–81 | Vergleichsanimation mit Orientierungszeigern und materiellem Fluidelement, Rankine-Profile, Zirkulation, Gegenbeispiel Scherströmung, Prüfungsfallen |
+| Die vier Modellwirbel | Kap. 10.1, S. 79–81 | Starrkörper gegen Potentialwirbel mit Orientierungszeigern und materiellem Fluidelement; der Rankine-Wirbel mit verschiebbarem Kernradius, Profilen, Druckdelle und Trichter; Zirkulation aller drei; der Hillsche Kugelwirbel im Meridianschnitt (mitbewegt und im Laborsystem) und als 3D-Torus; Gegenbeispiel Scherströmung, Prüfungsfallen |
 | Wirbellinien und die Grenzschicht | Kap. 10.1, S. 82 f., Abb. 10.4 | Wo Wirbellinien in fünf Strömungen liegen (3D, umschaltbar), Blasius-Grenzschicht mit ω-Verteilung und mitschwimmenden Schaufelrädern, ausgelenkte Wirbellinie (Λ-Wirbel), Galilei-Invarianz, Helmholtz |
 | Biot-Savart | Kap. 10.1, S. 83 f., Abb. 10.5 | Das Linienintegral Beitrag für Beitrag in einer drehbaren 3D-Szene (ds, r, das aufgespannte Parallelogramm, ds×r, mitwachsender Summenvektor), fünf Fadenformen mit numerischer Gegenprobe zur Winkelformel, die Grenzübergänge zu Γ/2πr und Γ/4πr, das Volumenintegral, Rechenlabor mit drei Prüfungsgeometrien |
 | Wirbelstreckung und Kippen | Kap. 10.2, S. 84–86 | Wirbelelement frei orientierbar, W mit Zerlegung in Streckung und Kippen, materielle Entwicklung, 2D-Sonderfall, Pirouetteneffekt. Löst FS24 3.3 und HS19 3.6 |
@@ -131,10 +131,12 @@ node verify.js
 gegen bekannte Werte nach — Syntax aller Dateien, die Formeln der Wirbelstreckung, das
 Biot-Savart-Linienintegral gegen seine geschlossenen Formeln, die Traglinie und die
 Beiwerte des Tragflügels, die Biot-Savart-Simulation beider Wandfälle, die Eigengeschwindigkeit Γ/(4πR) des freien Rings,
-die Blasius-Lösung und die Fanno-Verhältnisse gegen die Zahlenwerte des Skripts, die
+die Blasius-Lösung und die Fanno-Verhältnisse gegen die Zahlenwerte des Skripts, den
+Rankine-Wirbel (Anschluss bei r₀, dp/dr = ρuθ²/r, Bernoulli-Konstante) und den Hillschen
+Kugelwirbel (u aus ψ, ω_φ/ρ = const., div u = 0, Γ = 5Ua, geschlossene Bahnen), die
 Prandtl-Meyer-Funktion und die Wellenreflexionen im Freistrahl, die Düsenrechnung gegen die
 Isentropentafeln und die Einbindung in `index.html`. Wer ein Modul ändert, sollte das Skript
-danach laufen lassen; erwartete Ausgabe ist `ALLE 325 PRUEFUNGEN BESTANDEN`.
+danach laufen lassen; erwartete Ausgabe ist `ALLE 394 PRUEFUNGEN BESTANDEN`.
 
 Das Skript hat sich bereits bezahlt gemacht: es hat einen invertierten Massenstrom
 (`ṁ/ṁmax > 1` bei nicht gesperrter Düse) und zwei Preset-Knöpfe gefunden, die wegen der
